@@ -347,9 +347,22 @@ code{background:color-mix(in srgb,var(--ink) 7%,transparent);padding:1px 6px;bor
 
 </div>
 
-<script src="naver_spend_data.js"></script>
-<script src="naver_kw_data.js" onerror="window.__kwMissing=1"></script>
-<script src="naver_kw_daily_data.js" onerror="window.__kwdMissing=1"></script>
+<script>
+// 데이터 파일은 매일 갱신·재배포되는데 GitHub Pages(CDN)가 옛 버전을 캐싱해
+// 보여줄 수 있어(실측: 최신 push 이후에도 브라우저에 이전 수집분이 남아있었음)
+// 매 로드마다 캐시버스터를 붙여 강제로 새로 받는다.
+(function(){
+  var v = Date.now();
+  var files = ['naver_spend_data.js',
+    ['naver_kw_data.js', 'window.__kwMissing=1'],
+    ['naver_kw_daily_data.js', 'window.__kwdMissing=1']];
+  files.forEach(function(f){
+    var src = Array.isArray(f) ? f[0] : f, onerr = Array.isArray(f) ? f[1] : '';
+    document.write('<script src="' + src + '?v=' + v + '"' +
+      (onerr ? ' onerror="' + onerr + '"' : '') + '><\/script>');
+  });
+})();
+</script>
 <script>
 const D = window.NAVER_SPEND;
 const KW = window.NAVER_KW || null;
