@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>네이버 검색광고 소진현황</title>
+<script src="chart.umd.min.js"></script>
+<style>
+:root{
+  color-scheme: light;
+  --plane:#f4f4f1; --surface:#fcfcfb;
+  --ink:#0b0b0b; --ink2:#52514e; --muted:#8a8983;
+  --grid:#e7e6df; --axis:#c3c2b7; --border:rgba(11,11,11,.09);
+  --critical:#d03b3b;
+  --sa:#2a78d6; --ss:#eb6834; --pc:#1baf7a; --mo:#eda100;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4;
+  --seq:#2a78d6; --seq-bg:#dce9f9;
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme: dark;
+    --plane:#0c0c0c; --surface:#1a1a19;
+    --ink:#fff; --ink2:#c3c2b7; --muted:#8a8983;
+    --grid:#2a2a28; --axis:#3a3a37; --border:rgba(255,255,255,.10);
+    --critical:#e06666;
+    --sa:#3987e5; --ss:#d95926; --pc:#199e70; --mo:#c98500;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181;
+    --seq:#3987e5; --seq-bg:#173a5e;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --plane:#0c0c0c; --surface:#1a1a19;
+  --ink:#fff; --ink2:#c3c2b7; --muted:#8a8983;
+  --grid:#2a2a28; --axis:#3a3a37; --border:rgba(255,255,255,.10);
+  --critical:#e06666;
+  --sa:#3987e5; --ss:#d95926; --pc:#199e70; --mo:#c98500;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181;
+  --seq:#3987e5; --seq-bg:#173a5e;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--plane);color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.45}
+.wrap{max-width:1240px;margin:0 auto;padding:22px 22px 64px}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+h1{font-size:19px;margin:0;font-weight:750;letter-spacing:-.01em}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;
+  border:1px solid var(--border);background:var(--surface);font-size:12px;font-weight:600;color:var(--ink2)}
+.chip b{color:var(--ink);font-weight:700}
+.spacer{flex:1}
+button.ghost{background:var(--surface);border:1px solid var(--border);color:var(--ink2);
+  border-radius:8px;padding:6px 11px;cursor:pointer;font-size:12.5px}
+button.ghost:hover{border-color:var(--axis)}
+.meta{color:var(--muted);font-size:12px;margin:6px 0 2px}
+
+/* view nav */
+.nav{display:flex;gap:4px;margin:16px 0 0;border-bottom:1px solid var(--border)}
+.nav button{border:0;background:transparent;color:var(--muted);font-size:14px;font-weight:700;
+  padding:9px 16px;cursor:pointer;border-bottom:2.5px solid transparent;margin-bottom:-1px}
+.nav button:hover{color:var(--ink2)}
+.nav button.on{color:var(--ink);border-bottom-color:var(--s1)}
+.nav button .n{font-weight:600;color:var(--muted);font-size:11.5px;margin-left:5px}
+
+/* filters */
+.ctl{display:flex;gap:10px 22px;flex-wrap:wrap;align-items:center;margin:16px 0 2px;
+  padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:12px}
+.ctl .grp{display:flex;gap:8px;align-items:center}
+.ctl .lbl{color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.03em}
+.ctl.dim{opacity:.5;pointer-events:none}
+.tabs{display:flex;gap:5px;flex-wrap:wrap}
+.tab{padding:5px 12px;border-radius:8px;border:1px solid transparent;
+  background:transparent;color:var(--ink2);cursor:pointer;font-size:13px;font-weight:600}
+.tab:hover{background:var(--plane)}
+.tab.active{background:var(--s1);color:#fff}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+.seg button{border:0;background:transparent;color:var(--ink2);padding:5px 12px;cursor:pointer;
+  font-size:13px;font-weight:600;border-left:1px solid var(--border)}
+.seg button:first-child{border-left:0}
+.seg button:hover{background:var(--plane)}
+.seg button.on{color:#fff;background:var(--ink2)}
+.seg button.on.c-sa{background:var(--sa)} .seg button.on.c-ss{background:var(--ss)}
+.seg button.on.c-pc{background:var(--pc)} .seg button.on.c-mo{background:var(--mo)}
+input[type=date],input[type=number]{border:1px solid var(--border);background:var(--plane);color:var(--ink);
+  border-radius:8px;padding:5px 9px;font-size:12.5px;font-family:inherit;outline:none}
+input[type=date]:focus,input[type=number]:focus{border-color:var(--axis)}
+
+/* tiles */
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:16px 0}
+.tiles.eff3{grid-template-columns:repeat(3,1fr);margin-top:0}
+.tile{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px}
+.tile .lab{color:var(--muted);font-size:12px;font-weight:600;display:flex;justify-content:space-between;
+  align-items:center;gap:8px}
+.tile .val{font-size:30px;font-weight:760;margin-top:8px;line-height:1;letter-spacing:-.02em}
+.tile .val.sm{font-size:23px}
+.tile .val small{font-size:14px;color:var(--muted);font-weight:600;letter-spacing:0}
+.tile .sub{color:var(--ink2);font-size:12px;margin-top:9px;min-height:16px}
+.tile .sub.up{color:var(--critical);font-weight:700} .tile .sub.down{color:var(--muted)}
+.tag-time{font-size:10.5px;font-weight:700;color:var(--muted);border:1px solid var(--border);border-radius:6px;padding:1px 6px;white-space:nowrap}
+.delta{font-size:13px;font-weight:800;padding:2px 8px;border-radius:7px;margin-left:9px;vertical-align:middle}
+.delta.bad{background:color-mix(in srgb,var(--critical) 15%,transparent);color:var(--critical)}
+.delta.good{background:color-mix(in srgb,var(--pc) 16%,transparent);color:var(--pc)}
+.delta.flat{background:color-mix(in srgb,var(--muted) 18%,transparent);color:var(--ink2)}
+
+/* proportion mini-bar */
+.pbar{display:flex;height:7px;border-radius:5px;overflow:hidden;gap:2px;margin:9px 0 6px}
+.pbar span{display:block;min-width:2px}
+.plab{display:flex;flex-wrap:wrap;gap:3px 12px;font-size:11.5px;color:var(--ink2)}
+.plab i{font-style:normal;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;cursor:default}
+.dot{width:8px;height:8px;border-radius:2.5px;flex:none}
+.plab b{font-weight:700;font-variant-numeric:tabular-nums}
+
+/* panels */
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+.grid2.solo{grid-template-columns:1fr}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin:14px 0}
+.panel.tight{margin:0}
+.ph{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px}
+.panel h2{font-size:14px;margin:0;font-weight:700;color:var(--ink)}
+.panel h2 .hint{color:var(--muted);font-weight:500;font-size:11.5px;margin-left:6px}
+.chartbox{position:relative;height:300px}
+.chartbox.tall{height:340px}
+
+/* table */
+.tblwrap{overflow-x:auto;max-height:620px}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th,td{padding:8px 10px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--grid)}
+th{color:var(--muted);font-weight:600;font-size:11px;position:sticky;top:0;background:var(--surface);cursor:pointer;user-select:none;z-index:1}
+th.l,td.l{text-align:left}
+td.num{font-variant-numeric:tabular-nums}
+tbody tr:hover td{background:color-mix(in srgb,var(--ink) 3.5%,transparent)}
+.ref{color:var(--muted)}
+.tag{display:inline-block;padding:1px 7px;border-radius:6px;font-size:11px;font-weight:700}
+.tag-sa{background:color-mix(in srgb,var(--sa) 15%,transparent);color:var(--sa)}
+.tag-ss{background:color-mix(in srgb,var(--ss) 17%,transparent);color:var(--ss)}
+.tag-pc{background:color-mix(in srgb,var(--pc) 17%,transparent);color:var(--pc)}
+.tag-mo{background:color-mix(in srgb,var(--mo) 19%,transparent);color:var(--mo)}
+.tag-etc{background:color-mix(in srgb,var(--muted) 20%,transparent);color:var(--ink2)}
+.tag-good{background:color-mix(in srgb,var(--pc) 17%,transparent);color:var(--pc)}
+.tag-bad{background:color-mix(in srgb,var(--critical) 14%,transparent);color:var(--critical)}
+.warnrow td{background:color-mix(in srgb,var(--critical) 8%,transparent)!important}
+.pausedrow td:not(.keep){color:var(--muted)}
+.subtot td{background:color-mix(in srgb,var(--ink) 4%,transparent);font-weight:700;border-top:2px solid var(--axis);
+  position:sticky;bottom:0}
+.bar{position:relative;height:15px;width:96px;background:var(--seq-bg);border-radius:4px;overflow:hidden;display:inline-block;vertical-align:middle}
+.bar>span{position:absolute;left:0;top:0;bottom:0;background:var(--seq);border-radius:4px}
+.bar.over>span{background:var(--critical)}
+.bar-na{color:var(--muted);font-size:11px}
+.pct{font-variant-numeric:tabular-nums;margin-left:6px;font-size:11px;color:var(--ink2)}
+.foot{color:var(--muted);font-size:11.5px;margin-top:10px;line-height:1.6}
+.alert{border-radius:10px;padding:10px 13px;font-size:12.5px;margin-bottom:12px;line-height:1.65;border:1px solid transparent}
+.alert.crit{background:color-mix(in srgb,var(--critical) 11%,transparent);color:var(--critical);border-color:color-mix(in srgb,var(--critical) 28%,transparent)}
+.alert.ok{background:color-mix(in srgb,var(--pc) 11%,transparent);color:var(--pc)}
+.alert.info{background:color-mix(in srgb,var(--s1) 10%,transparent);color:var(--ink2);border-color:color-mix(in srgb,var(--s1) 22%,transparent)}
+.alert b{font-weight:800}
+.tblctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.search{border:1px solid var(--border);background:var(--plane);color:var(--ink);border-radius:8px;
+  padding:6px 11px;font-size:12.5px;width:190px;outline:none}
+.search:focus{border-color:var(--axis)}
+.view{display:none}
+.view.on{display:block}
+
+/* simulator */
+.simgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:16px 0}
+.simctl{display:flex;gap:12px 24px;flex-wrap:wrap;align-items:center}
+.slider{width:100%;margin:10px 0 2px;accent-color:var(--s1)}
+.kv{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dashed var(--grid);font-size:12.5px}
+.kv:last-child{border-bottom:0}
+.kv b{font-variant-numeric:tabular-nums;font-weight:750}
+.big{font-size:26px;font-weight:780;letter-spacing:-.02em;margin:6px 0 2px}
+.chiprow{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.kwcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.kwcard{border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--plane)}
+.kwcard .k{font-weight:750;font-size:13px;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kwcard .m{font-size:11.5px;color:var(--ink2);font-variant-numeric:tabular-nums}
+.empty{padding:40px 20px;text-align:center;color:var(--muted);font-size:13px;line-height:1.9}
+code{background:color-mix(in srgb,var(--ink) 7%,transparent);padding:1px 6px;border-radius:5px;font-size:12px}
+@media (max-width:900px){
+  .tiles,.tiles.eff3,.simgrid{grid-template-columns:1fr 1fr}
+  .grid2{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>네이버 검색광고 대시보드</h1>
+    <span class="chip" id="cycleChip">데이터 기준 —</span>
+    <div class="spacer"></div>
+    <button class="ghost" id="csvBtn">⬇ CSV</button>
+    <button class="ghost" id="themeBtn">🌓 테마</button>
+  </header>
+  <div class="meta" id="hmeta"></div>
+
+  <div class="nav" id="nav">
+    <button data-v="spend" class="on">소진현황</button>
+    <button data-v="sim">효율 시뮬레이터</button>
+    <button data-v="kw">키워드</button>
+  </div>
+
+  <div class="ctl" id="ctlBar">
+    <div class="grp"><span class="lbl">계정</span><div class="tabs" id="tabs"></div></div>
+    <div class="grp"><span class="lbl">유형</span><div class="seg" id="kindSeg"></div></div>
+    <div class="grp"><span class="lbl">디바이스</span><div class="seg" id="devSeg"></div></div>
+  </div>
+  <div class="ctl" id="perBar">
+    <div class="grp"><span class="lbl">기간</span><div class="seg" id="perSeg"></div></div>
+    <div class="grp"><input type="date" id="dFrom"> <span style="color:var(--muted)">~</span> <input type="date" id="dTo"></div>
+    <div class="spacer"></div>
+    <span class="chip" id="perChip"></span>
+  </div>
+
+<!-- ══════════════ 소진현황 ══════════════ -->
+<div class="view on" id="v-spend">
+  <div class="tiles" id="tiles"></div>
+  <div class="tiles eff3" id="effTiles"></div>
+
+  <div class="grid2" id="grid2">
+    <div class="panel tight" id="acctPanel">
+      <div class="ph"><h2 id="acctTitle">계정별 소진</h2><div class="grp"><span class="lbl">분해</span><div class="seg" id="acctSeg"></div></div></div>
+      <div class="chartbox tall"><canvas id="acctBar"></canvas></div>
+    </div>
+    <div class="panel tight">
+      <div class="ph"><h2 id="trendTitle">일별 소진 추세</h2><div class="grp"><span class="lbl">분해</span><div class="seg" id="trendSeg"></div></div></div>
+      <div class="chartbox tall"><canvas id="trend"></canvas></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="ph">
+      <h2>시간대별 소진 · 노출 <span class="hint" id="hourHint"></span></h2>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+        <div class="grp"><span class="lbl">분해</span><div class="seg" id="hourBySeg"></div></div>
+        <div class="grp"><span class="lbl">지표</span><div class="seg" id="hourMetricSeg"></div></div>
+      </div>
+    </div>
+    <div id="hourAlert"></div>
+    <div class="chartbox tall"><canvas id="hourly"></canvas></div>
+  </div>
+
+  <div class="panel">
+    <div class="ph">
+      <h2>캠페인별 소진·예산·효율<span class="hint">기간 합계 · 헤더 클릭 = 정렬</span></h2>
+      <div class="tblctl">
+        <input id="tblSearch" class="search" type="text" placeholder="🔍 캠페인명 검색" autocomplete="off">
+        <div class="seg" id="statusSeg"></div>
+      </div>
+    </div>
+    <div class="tblwrap">
+      <table id="camptbl">
+        <thead><tr>
+          <th class="l" data-k="acct">계정</th>
+          <th class="l" data-k="name">캠페인</th>
+          <th class="l" data-k="kind">유형</th>
+          <th class="l" data-k="device">기기</th>
+          <th data-k="spend">기간 소진</th>
+          <th data-k="tspend">오늘 소진</th>
+          <th data-k="dailyBudget">일예산</th>
+          <th data-k="budgetUsedPct">오늘 소진율</th>
+          <th data-k="imp">노출</th>
+          <th data-k="clk">클릭</th>
+          <th data-k="ctr">CTR</th>
+          <th data-k="cpc">CPC</th>
+          <th data-k="cvr">CVR<span class="ref">·참고</span></th>
+          <th data-k="cpa">CPA<span class="ref">·참고</span></th>
+          <th data-k="roas">ROAS<span class="ref">·참고</span></th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="foot">
+      빨강 행 = 오늘 일예산 소진(광고 중단 위험) · <b>SA</b> 파워링크·<b>SS</b> 쇼핑검색 / <b>PC·모바일</b>은 캠페인명 <code>_P_</code>·<code>_M_</code> 토큰 기준 ·
+      일예산·소진율은 <b>오늘 기준</b>(과거 예산 이력은 API로 조회 불가) ·
+      소진액·CTR·CPC는 신뢰지표, CVR/CPA/ROAS는 네이버 전환태그 과소계상으로 <b>방향성 참고용</b>.
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ 시뮬레이터 ══════════════ -->
+<div class="view" id="v-sim">
+  <div class="panel">
+    <div class="ph">
+      <h2>수확체감 진단 <span class="hint">일별 소진↔클릭 관계로 추정</span></h2>
+      <div class="simctl">
+        <div class="grp"><span class="lbl">클릭 1회 허용 한계CPC</span>
+          <input type="number" id="targetCPC" step="10" style="width:110px"> <span style="color:var(--muted);font-size:12px">원</span>
+          <button class="ghost" id="resetCPC">현재 한계CPC</button>
+          <button class="ghost" id="avgCPCBtn">평균 CPC</button>
+        </div>
+      </div>
+    </div>
+    <div id="simAlert"></div>
+    <div class="simgrid" id="simCards"></div>
+    <div class="grid2">
+      <div class="panel tight">
+        <div class="ph"><h2>일별 소진 vs 클릭 <span class="hint">점=실제 완료일 · 선=추정곡선</span></h2></div>
+        <div class="chartbox tall"><canvas id="simChart"></canvas></div>
+      </div>
+      <div class="panel tight">
+        <div class="ph"><h2>예산별 한계CPC <span class="hint">추가 클릭 1회를 얻는 데 드는 비용</span></h2></div>
+        <div class="chartbox tall"><canvas id="mcChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="ph"><h2>예산 재배분 최적화 <span class="hint">총예산은 그대로 · 세그먼트 배분만 조정</span></h2>
+      <span class="chip" id="allocChip"></span></div>
+    <div id="allocAlert"></div>
+    <div class="tblwrap">
+      <table id="alloctbl">
+        <thead><tr>
+          <th class="l">세그먼트</th><th>현재 일예산</th><th>권장 일예산</th><th>증감</th>
+          <th>현재 한계CPC</th><th>재배분 후</th><th>체감 b</th><th>R²</th>
+          <th>예상 클릭 증감</th><th class="l">조치</th>
+        </tr></thead><tbody></tbody>
+      </table>
+    </div>
+    <div class="foot">한계CPC가 낮은 세그먼트 = 같은 돈으로 클릭을 더 싸게 사는 구간. 모든 세그먼트의 한계CPC가 같아질 때
+      총 클릭이 최대가 됩니다(등한계 원리). 급격한 이동을 막기 위해 세그먼트당 <b>현재의 0.4~2.5배</b>로 제한했습니다.</div>
+  </div>
+
+  <div class="panel">
+    <div class="ph"><h2>총예산 수준 시뮬레이션 <span class="hint">슬라이더로 전체 일예산을 바꿔 예상 성과 확인</span></h2>
+      <span class="chip" id="simSlideChip"></span></div>
+    <input type="range" class="slider" id="simSlider" min="20" max="250" value="100">
+    <div class="simgrid" id="simSlideCards"></div>
+    <div class="tblwrap" style="margin-top:14px">
+      <table id="simtbl">
+        <thead><tr>
+          <th class="l">시나리오</th><th>일예산</th><th>예상 클릭</th><th>평균 CPC</th><th>한계 CPC</th>
+          <th>현재 대비 클릭</th><th>증분 클릭당 비용</th>
+        </tr></thead><tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="ph"><h2>모델과 한계 <span class="hint">해석 시 반드시 함께 읽을 것</span></h2></div>
+    <div class="foot" id="simFoot"></div>
+  </div>
+</div>
+
+<!-- ══════════════ 키워드 ══════════════ -->
+<div class="view" id="v-kw">
+  <div id="kwBody"></div>
+</div>
+
+</div>
+
+<script src="naver_spend_data.js"></script>
+<script src="naver_kw_data.js" onerror="window.__kwMissing=1"></script>
+<script src="naver_kw_daily_data.js" onerror="window.__kwdMissing=1"></script>
+<script>
+const D = window.NAVER_SPEND;
+const KW = window.NAVER_KW || null;
+const KWD = window.NAVER_KW_DAILY || null;
+if(!D){ document.body.innerHTML='<div class="wrap"><h1>데이터 없음</h1><p>naver_spend_collect.py를 먼저 실행하세요.</p></div>'; }
+
+const KL=(D&&D.kinds)||{SA:'파워링크',SS:'쇼핑검색',ETC:'기타'};
+const DL=(D&&D.devices)||{PC:'PC',MO:'모바일',ETC:'기타'};
+const won=n=>(n==null?'—':Math.round(n).toLocaleString('ko-KR')+'원');
+const krw=n=>{ if(n==null)return '—'; n=Math.round(n);
+  if(Math.abs(n)>=1e8)return (n/1e8).toFixed(2)+'억';
+  if(Math.abs(n)>=1e4)return Math.round(n/1e4).toLocaleString('ko-KR')+'만'; return n.toLocaleString('ko-KR'); };
+const int=n=>(n==null?'—':Math.round(n).toLocaleString('ko-KR'));
+const cvar=k=>getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+const fmtCyc=c=>c?`${c.slice(8,10)}:${c.slice(10,12)}`:'—';
+const md=d=>d?`${+d.slice(5,7)}/${+d.slice(8,10)}`:'—';
+function kindTag(k){return `<span class="tag tag-${k==='SA'?'sa':k==='SS'?'ss':'etc'}">${KL[k]||k}</span>`;}
+function devTag(d){return `<span class="tag tag-${d==='PC'?'pc':d==='MO'?'mo':'etc'}">${DL[d]||d}</span>`;}
+
+// ── 날짜 유틸 (로컬 기준, UTC 변환 금지) ────────────────────────────────
+const pad=n=>String(n).padStart(2,'0');
+const toD=s=>new Date(+s.slice(0,4),+s.slice(5,7)-1,+s.slice(8,10));
+const fmtD=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+function shiftDay(s,n){const d=toD(s);d.setDate(d.getDate()+n);return fmtD(d);}
+function dayDiff(a,b){return Math.round((toD(b)-toD(a))/864e5);}   // b - a
+const clampD=(s,lo,hi)=>s<lo?lo:(s>hi?hi:s);
+
+const TODAY=D.period.today, YDAY=shiftDay(TODAY,-1);
+const ASTART=D.period.archiveStart||D.period.monthStart, MSTART=D.period.monthStart;
+const LMEND=shiftDay(MSTART,-1), LMSTART=LMEND.slice(0,8)+'01';
+
+// ── 상태 ────────────────────────────────────────────────────────────────
+let view='spend';
+let scope='ALL', kind='ALL', device='ALL', trendBy='device', acctBy='device';
+let sortKey='spend', sortDir=-1;
+let tblQuery='', tblStatus='all';
+let hourMetric='spend', hourBy='all';
+let preset='month', pFrom=MSTART, pTo=TODAY;
+let targetCPC=null, slidePct=100;
+let kwSort='clk', kwDir=-1, kwQuery='', kwGrade='all';
+const METL={spend:'소진액',imp:'노출',clk:'클릭'};
+const METMIN={spend:30000,imp:300,clk:10};
+const ACC_COLORS=['--s1','--s2','--s3','--s4','--s5'];
+const PRESETS={
+  today:['오늘',()=>[TODAY,TODAY]],
+  yday:['어제',()=>[YDAY,YDAY]],
+  d7:['최근7일',()=>[shiftDay(TODAY,-6),TODAY]],
+  d14:['최근14일',()=>[shiftDay(TODAY,-13),TODAY]],
+  d30:['최근30일',()=>[shiftDay(TODAY,-29),TODAY]],
+  month:['이번달',()=>[MSTART,TODAY]],
+  lastmonth:['지난달',()=>[LMSTART,LMEND]],
+  all:['전체',()=>[ASTART,TODAY]],
+};
+
+// ── 선택/집계 ───────────────────────────────────────────────────────────
+function accountsInScope(){return scope==='ALL'?D.accounts:D.accounts.filter(a=>a.name===scope);}
+function selCampaigns(){ const out=[];
+  accountsInScope().forEach(a=>a.campaigns.forEach(c=>{
+    if((kind==='ALL'||c.kind===kind)&&(device==='ALL'||c.device===device)) out.push(Object.assign({acct:a.name},c));
+  })); return out; }
+const z5=()=>[0,0,0,0,0];
+function agg(camps,from,to){ // {tot:[5], dm:{date:[5]}}
+  const tot=z5(), dm={};
+  camps.forEach(c=>{const dd=c.daily;
+    for(const d in dd){ if(d<from||d>to)continue; const r=dd[d];
+      let t=dm[d]; if(!t)t=dm[d]=z5();
+      for(let i=0;i<5;i++){t[i]+=r[i];tot[i]+=r[i];} }});
+  return {tot,dm};
+}
+function campTotal(c,from,to){const t=z5();const dd=c.daily;
+  for(const d in dd){ if(d<from||d>to)continue; const r=dd[d]; for(let i=0;i<5;i++)t[i]+=r[i]; }
+  return t;}
+function eff5(a){const[s,imp,clk,cv,ca]=a;
+  return{spend:s,imp,clk,conv:cv,convAmt:ca,ctr:imp?clk/imp*100:0,cpc:clk?s/clk:0,
+    cvr:clk?cv/clk*100:0,cpa:cv?s/cv:0,roas:s?ca/s*100:0};}
+function prevRange(){const L=dayDiff(pFrom,pTo)+1, to=shiftDay(pFrom,-1);
+  return [shiftDay(to,-(L-1)),to,L];}
+function completedTo(){return pTo<TODAY?pTo:YDAY;}   // 기간 내 '완료일' 끝
+function presentVals(field){ const has=new Set();
+  D.accounts.forEach(a=>a.campaigns.forEach(c=>{ if(c.today.spend||Object.keys(c.daily).length) has.add(c[field]); }));
+  return [...has].sort(); }
+
+// ── CSV ─────────────────────────────────────────────────────────────────
+function toCSV(rows){return rows.map(r=>r.map(v=>{v=(v==null?'':String(v));
+  return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}).join(',')).join('\r\n');}
+function downloadCSV(name,rows){
+  const blob=new Blob(['﻿'+toCSV(rows)],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+}
+function exportSpendCSV(){
+  const camps=selCampaigns();
+  const rows=[['날짜','계정','캠페인','유형','기기','상태','일예산','소진액','노출','클릭','전환수','전환매출','CTR(%)','CPC','CPA','ROAS(%)']];
+  camps.forEach(c=>{ const ds=Object.keys(c.daily).filter(d=>d>=pFrom&&d<=pTo).sort();
+    ds.forEach(d=>{ const e=eff5(c.daily[d]);
+      rows.push([d,c.acct,c.name,KL[c.kind]||c.kind,DL[c.device]||c.device,c.status||'',
+        c.useDailyBudget?c.dailyBudget:'',e.spend,e.imp,e.clk,e.conv,e.convAmt,
+        e.ctr.toFixed(2),Math.round(e.cpc),Math.round(e.cpa),e.roas.toFixed(1)]); }); });
+  downloadCSV(`naver_소진_rawdata_${pFrom}_${pTo}.csv`,rows);
+}
+function exportKwCSV(){
+  const rows=[['계정','키워드','캠페인','그룹','유형','기기','입찰가','노출','클릭','비용','CTR(%)','CPC','전환수','전환매출','평균순위',
+               '직전노출','직전클릭','직전비용','직전CPC','비용증감','CPC증감']];
+  kwRows().forEach(k=>rows.push([k.acct,k.kw,k.camp,k.grp,KL[k.kind]||k.kind,DL[k.device]||k.device,k.bid,
+    k.imp,k.clk,k.cost,k.ctr.toFixed(2),Math.round(k.cpc),k.conv,k.convAmt,k.rnk,
+    k.pImp,k.pClk,k.pCost,Math.round(k.pcpc),k.cost-k.pCost,Math.round(k.cpc-k.pcpc)]));
+  downloadCSV(`naver_키워드_rawdata_${KW.period.since}_${KW.period.until}.csv`,rows);
+}
+
+// ── 헤더 / 컨트롤 ───────────────────────────────────────────────────────
+function renderHeader(){
+  const cyc=[...new Set(D.accounts.map(a=>a.cycleBaseTm).filter(Boolean))];
+  document.getElementById('cycleChip').innerHTML=
+    `⏱ 데이터 기준 <b>${cyc.length?cyc.map(fmtCyc).join(' / '):'—'}</b> <span style="color:var(--muted);font-weight:500">· 네이버 집계(실시간 아님)</span>`;
+  document.getElementById('hmeta').textContent=
+    `수집 ${D.generated} · 아카이브 ${ASTART} ~ ${D.period.archiveEnd||YDAY} (+오늘)`;
+
+  const tabs=document.getElementById('tabs');
+  const mk=(id,l)=>`<div class="tab${scope===id?' active':''}" data-id="${id}">${l}</div>`;
+  tabs.innerHTML=mk('ALL','전체')+D.accounts.map(a=>mk(a.name,a.name)).join('');
+  tabs.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{scope=t.dataset.id;renderAll();});
+
+  seg('kindSeg',[['ALL','전체']].concat(presentVals('kind').map(k=>[k,KL[k]+`(${k})`])),kind,v=>{kind=v;renderAll();},{SA:'c-sa',SS:'c-ss'});
+  seg('devSeg',[['ALL','전체']].concat(presentVals('device').map(d=>[d,DL[d]])),device,v=>{device=v;renderAll();},{PC:'c-pc',MO:'c-mo'});
+  seg('perSeg',Object.keys(PRESETS).map(k=>[k,PRESETS[k][0]]).concat([['custom','직접']]),preset,
+    v=>{ if(v==='custom'){preset='custom';} else {preset=v;[pFrom,pTo]=PRESETS[v][1]();} renderAll(); },{});
+  document.getElementById('dFrom').value=pFrom; document.getElementById('dTo').value=pTo;
+  document.getElementById('dFrom').min=ASTART; document.getElementById('dFrom').max=TODAY;
+  document.getElementById('dTo').min=ASTART; document.getElementById('dTo').max=TODAY;
+  const L=dayDiff(pFrom,pTo)+1, pv=prevRange();
+  document.getElementById('perChip').innerHTML=
+    `<b>${L}일</b> · ${md(pFrom)}~${md(pTo)}${pTo>=TODAY?' <span style="color:var(--muted)">(오늘 진행중 포함)</span>':''}
+     <span style="color:var(--muted)">· 비교 ${md(pv[0])}~${md(pv[1])}</span>`;
+
+  seg('trendSeg',[['device','기기'],['kind','유형'],['acct','계정']],trendBy,v=>{trendBy=v;renderTrend();},{});
+  seg('acctSeg',[['device','기기'],['kind','유형']],acctBy,v=>{acctBy=v;renderAcctBar();},{});
+  seg('statusSeg',[['all','전체'],['active','활성'],['paused','중단'],['exhausted','예산소진']],tblStatus,v=>{tblStatus=v;renderTable();},{});
+  seg('hourBySeg',[['all','전체'],['device','기기'],['kind','유형']],hourBy,v=>{hourBy=v;renderHourly();},{});
+  seg('hourMetricSeg',[['spend','소진액'],['imp','노출'],['clk','클릭']],hourMetric,v=>{hourMetric=v;renderHourly();},{});
+  const bl=document.getElementById('baseLbl'); if(bl) bl.textContent=D.hourlyBaseLabel||'기준선';
+  document.getElementById('perBar').classList.toggle('dim',view==='kw');
+}
+function seg(id,opts,cur,on,cmap){
+  const el=document.getElementById(id); if(!el)return;
+  el.innerHTML=opts.map(([v,l])=>`<button class="${cur===v?'on '+((cmap||{})[v]||''):''}" data-v="${v}">${l}</button>`).join('');
+  el.querySelectorAll('button').forEach(b=>b.onclick=()=>on(b.dataset.v));
+}
+
+// ── 타일 ────────────────────────────────────────────────────────────────
+function propBar(segs){
+  const tot=segs.reduce((s,x)=>s+x.val,0)||1;
+  const pct=s=>(s.val/tot*100).toFixed(0);
+  const fill=segs.map(s=>`<span title="${s.label} ${pct(s)}% · ${won(s.val)}" style="width:${s.val/tot*100}%;background:${cvar(s.cssvar)}"></span>`).join('');
+  const lab=segs.map(s=>`<i title="${s.label} 비중 ${pct(s)}% · ${won(s.val)}"><span class="dot" style="background:${cvar(s.cssvar)}"></span>${s.label} <b>${krw(s.val)}</b> <span style="color:var(--muted)">${pct(s)}%</span></i>`).join('');
+  return `<div class="pbar">${fill}</div><div class="plab">${lab}</div>`;
+}
+function renderTiles(){
+  const camps=selCampaigns();
+  const cur=agg(camps,pFrom,pTo), pv=prevRange(), prev=agg(camps,pv[0],pv[1]);
+  const ce=eff5(cur.tot), pe=eff5(prev.tot);
+  const cend=completedTo();
+  const compl=agg(camps,pFrom,cend), nDone=Object.keys(compl.dm).length;
+  const avg=nDone?compl.tot[0]/nDone:0;
+  const pcompl=agg(camps,pv[0],pv[1]), pDone=Object.keys(pcompl.dm).length;
+  const pavg=pDone?pcompl.tot[0]/pDone:0;
+  const todayTot=agg(camps,TODAY,TODAY).tot;
+  const cyc=[...new Set(accountsInScope().map(a=>a.cycleBaseTm).filter(Boolean))];
+  const timeTag=cyc.length?`<span class="tag-time">${cyc.map(fmtCyc).join('/')} 기준</span>`:'';
+  let bd='';
+  const sumOf=fn=>agg(camps.filter(fn),pFrom,pTo).tot[0];
+  if(kind==='ALL') bd=propBar([{label:'SA',val:sumOf(c=>c.kind==='SA'),cssvar:'--sa'},
+                               {label:'SS',val:sumOf(c=>c.kind==='SS'),cssvar:'--ss'}]);
+  else if(device==='ALL') bd=propBar([{label:'PC',val:sumOf(c=>c.device==='PC'),cssvar:'--pc'},
+                               {label:'MO',val:sumOf(c=>c.device==='MO'),cssvar:'--mo'}]);
+  let bd2='';
+  if(kind==='ALL'&&device==='ALL') bd2=propBar([{label:'PC',val:sumOf(c=>c.device==='PC'),cssvar:'--pc'},
+                               {label:'MO',val:sumOf(c=>c.device==='MO'),cssvar:'--mo'}]);
+  const pace=todayTot[0]-avg;
+  document.getElementById('tiles').innerHTML=`
+    <div class="tile"><div class="lab"><span>기간 소진 합계</span><span style="font-weight:500">${md(pFrom)}~${md(pTo)}</span></div>
+      <div class="val">${krw(cur.tot[0])} ${effDelta(cur.tot[0],prev.tot[0],'rel',null)}</div>${bd}${bd2}</div>
+    <div class="tile"><div class="lab"><span>일평균 소진</span><span style="font-weight:500">완료일 ${nDone}일</span></div>
+      <div class="val">${krw(avg)} ${effDelta(avg,pavg,'rel',null)}</div>
+      <div class="sub">직전기간 일평균 ${pavg?krw(pavg):'—'} <span style="color:var(--muted)">· ${md(pv[0])}~${md(pv[1])}</span></div></div>
+    <div class="tile"><div class="lab"><span>오늘 소진 (진행중)</span>${timeTag}</div>
+      <div class="val">${krw(todayTot[0])}</div>
+      <div class="sub ${pace>=0?'up':'down'}">${pace>=0?'▲':'▼'} ${krw(Math.abs(pace))} <span style="color:var(--muted);font-weight:500">vs 기간 일평균</span></div></div>
+    <div class="tile"><div class="lab">기간 노출 / 클릭</div>
+      <div class="val">${int(cur.tot[2])} <small>클릭</small></div>
+      <div class="sub">노출 ${int(cur.tot[1])} · 전환 ${int(cur.tot[3])}건</div></div>`;
+  renderEffTiles(ce,pe,pv);
+}
+function effDelta(cur, base, unit, higherGood){
+  if(base==null||!base||cur==null) return '<span class="delta flat">기준 없음</span>';
+  if(unit==='pp'){ const d=cur-base; if(Math.abs(d)<0.05) return '<span class="delta flat">≈ 동일</span>';
+    return `<span class="delta ${higherGood==null?'flat':((higherGood?d>0:d<0)?'good':'bad')}">${d>0?'+':''}${d.toFixed(2)}%p</span>`; }
+  const pct=(cur/base-1)*100; if(Math.abs(pct)<2) return '<span class="delta flat">≈ 동일</span>';
+  const cls=higherGood==null?'flat':((higherGood?pct>0:pct<0)?'good':'bad');
+  return `<span class="delta ${cls}">${pct>0?'▲':'▼'} ${Math.abs(pct).toFixed(0)}%</span>`;
+}
+function renderEffTiles(te,be,pv){
+  const cmp=`vs 직전 ${md(pv[0])}~${md(pv[1])}`;
+  document.getElementById('effTiles').innerHTML=`
+    <div class="tile"><div class="lab"><span>CPC (클릭당 비용)</span><span style="font-weight:500;color:var(--muted)">${cmp}</span></div>
+      <div class="val">${won(Math.round(te.cpc))} ${effDelta(te.cpc,be.cpc,'rel',false)}</div>
+      <div class="sub">직전 ${be.cpc?won(Math.round(be.cpc)):'—'} · 낮을수록 좋음</div></div>
+    <div class="tile"><div class="lab"><span>CTR (클릭률)</span><span style="font-weight:500;color:var(--muted)">${cmp}</span></div>
+      <div class="val">${te.ctr.toFixed(2)}% ${effDelta(te.ctr,be.ctr,'pp',true)}</div>
+      <div class="sub">직전 ${be.ctr?be.ctr.toFixed(2)+'%':'—'} · 높을수록 좋음</div></div>
+    <div class="tile"><div class="lab"><span>전환효율</span><span style="font-weight:500;color:var(--muted)">참고 · ${cmp}</span></div>
+      <div class="val sm">ROAS ${te.roas?te.roas.toFixed(0)+'%':'—'} ${effDelta(te.roas,be.roas,'rel',true)}</div>
+      <div class="sub">CVR ${te.cvr?te.cvr.toFixed(2)+'%':'—'} · CPA ${te.cpa?won(Math.round(te.cpa)):'—'} <span style="color:var(--muted)">· 전환 집계지연·과소계상</span></div></div>`;
+}
+
+// ── 계정별 소진 (가로 스택) ─────────────────────────────────────────────
+let acctChart;
+function renderAcctBar(){
+  const panel=document.getElementById('acctPanel'), g2=document.getElementById('grid2');
+  if(scope!=='ALL'){ panel.style.display='none'; g2.classList.add('solo'); if(acctChart){acctChart.destroy();acctChart=null;} renderTrend(); return; }
+  panel.style.display=''; g2.classList.remove('solo');
+  document.getElementById('acctTitle').innerHTML=`계정별 소진<span class="hint">${md(pFrom)}~${md(pTo)}</span>`;
+  const accs=D.accounts, labels=accs.map(a=>a.name);
+  const segs = acctBy==='device'
+    ? [['PC','PC','--pc'],['MO','모바일','--mo']]
+    : [['SA','파워링크(SA)','--sa'],['SS','쇼핑검색(SS)','--ss']];
+  const key = acctBy==='device' ? 'device':'kind';
+  const ink=cvar('--ink2'), grid=cvar('--grid'), axis=cvar('--axis');
+  const datasets=segs.map(s=>({label:s[1],backgroundColor:cvar(s[2]),borderWidth:0,borderRadius:3,
+    data:accs.map(a=>agg(a.campaigns.filter(c=>(device==='ALL'||c.device===device)&&(kind==='ALL'||c.kind===kind)&&c[key]===s[0]),pFrom,pTo).tot[0])}));
+  if(acctChart)acctChart.destroy();
+  const cv=document.getElementById('acctBar'),box=cv.parentElement;
+  cv.width=Math.max(320,box.clientWidth); cv.height=box.clientHeight||300;
+  acctChart=new Chart(cv,{type:'bar',data:{labels,datasets},
+    options:{indexAxis:'y',responsive:false,maintainAspectRatio:false,animation:false,
+      interaction:{mode:'index',axis:'y',intersect:false},
+      plugins:{legend:{position:'top',align:'end',labels:{color:ink,boxWidth:10,boxHeight:10,usePointStyle:true,pointStyle:'rectRounded'}},
+        tooltip:{callbacks:{
+          title:items=>items.length?items[0].label:'',
+          label:c=>{const i=c.dataIndex,tot=c.chart.data.datasets.reduce((s,ds)=>s+(ds.data[i]||0),0)||1;
+            return ` ${c.dataset.label}: ${won(c.parsed.x)} (${(c.parsed.x/tot*100).toFixed(0)}%)`;},
+          footer:items=>{const i=items[0].dataIndex,tot=items[0].chart.data.datasets.reduce((s,ds)=>s+(ds.data[i]||0),0);
+            return '합계 '+won(tot);}}}},
+      scales:{x:{stacked:true,grid:{color:grid},border:{display:false},ticks:{color:ink,callback:v=>krw(v)}},
+        y:{stacked:true,grid:{display:false},border:{color:axis},ticks:{color:cvar('--ink'),font:{weight:'600'}}}}}});
+}
+
+// ── 추세 ────────────────────────────────────────────────────────────────
+let chart;
+function trendGroups(camps){
+  if(trendBy==='kind') return [['SA',KL.SA+'(SA)','--sa'],['SS',KL.SS+'(SS)','--ss']].map(g=>({label:g[1],color:g[2],camps:camps.filter(c=>c.kind===g[0])}));
+  if(trendBy==='device') return [['PC','PC','--pc'],['MO','모바일','--mo']].map(g=>({label:g[1],color:g[2],camps:camps.filter(c=>c.device===g[0])}));
+  return accountsInScope().map(a=>({label:a.name,color:ACC_COLORS[D.accounts.indexOf(a)%5],camps:camps.filter(c=>c.acct===a.name)}));
+}
+function renderTrend(){
+  const camps=selCampaigns();
+  const grps=trendGroups(camps).filter(g=>g.camps.length);
+  const all=agg(camps,pFrom,pTo);
+  const days=Object.keys(all.dm).sort(), labels=days.map(md);
+  const ink=cvar('--ink2'), grid=cvar('--grid'), axis=cvar('--axis');
+  const datasets=grps.map(g=>{const dm=agg(g.camps,pFrom,pTo).dm,col=cvar(g.color);
+    return {label:g.label,data:days.map(d=>dm[d]?dm[d][0]:0),borderColor:col,backgroundColor:col,
+      borderWidth:2,tension:.3,pointRadius:0,pointHoverRadius:5,spanGaps:true};});
+  document.getElementById('trendTitle').innerHTML=
+    `일별 소진 추세<span class="hint">${md(pFrom)}~${md(pTo)} · ${days.length}일${pTo>=TODAY?' · 오늘 진행중':''}</span>`;
+  if(chart)chart.destroy();
+  const cv=document.getElementById('trend'),box=cv.parentElement;
+  cv.width=Math.max(320,box.clientWidth); cv.height=box.clientHeight||300;
+  chart=new Chart(cv,{type:'line',data:{labels,datasets},
+    options:{responsive:false,maintainAspectRatio:false,animation:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:datasets.length>1,position:'top',align:'end',labels:{color:ink,boxWidth:10,boxHeight:10,usePointStyle:true,pointStyle:'line'}},
+        tooltip:{callbacks:{
+          label:c=>{const i=c.dataIndex,tot=c.chart.data.datasets.reduce((s,ds)=>s+(ds.data[i]||0),0)||1;
+            return datasets.length>1?` ${c.dataset.label}: ${won(c.parsed.y)} (${(c.parsed.y/tot*100).toFixed(0)}%)`:` ${won(c.parsed.y)}`;},
+          footer:items=>datasets.length>1?'합계 '+won(items.reduce((s,i)=>s+i.parsed.y,0)):''}}},
+      scales:{x:{grid:{display:false},border:{color:axis},ticks:{color:ink,maxRotation:0,autoSkip:true,maxTicksLimit:12}},
+        y:{grid:{color:grid},border:{display:false},ticks:{color:ink,callback:v=>krw(v)}}}}});
+}
+
+// ── 시간대별 (기간필터가 하루면 그 날, 아니면 오늘 vs 기준선) ──────────
+let hourChart, hourSel={mode:'today'};
+function baseHourIdx(){const cyc=D.accounts.map(a=>a.cycleBaseTm).filter(Boolean)[0];
+  return cyc?parseInt(cyc.slice(8,10),10):24;}
+function hourlyDayInfo(){
+  // 기간필터가 단일일이면 그 날을 시간대 소스로. 오늘=진행중(hourlyToday),
+  // 과거=hourlyDays 보관분(hh24는 최근 7일만). 범위 필터는 오늘 기준 유지.
+  if(pFrom!==pTo||pFrom===TODAY) return {mode:'today'};
+  const has=D.accounts.some(a=>a.hourlyDays&&a.hourlyDays[pFrom]);
+  return has?{mode:'day',day:pFrom}:{mode:'today',miss:pFrom};
+}
+function hourSrcT(a){return (hourSel.mode==='day'?(a.hourlyDays||{})[hourSel.day]:a.hourlyToday)||{};}
+function hourDoneIdx(){return hourSel.mode==='day'?24:baseHourIdx();}
+function scanAnomalies(metric){
+  const bh=hourDoneIdx(), MIN=METMIN[metric], keys={};
+  accountsInScope().forEach(a=>{
+    const merge=(H,slot)=>{for(const key in H){const p=key.split('|');
+      if((kind!=='ALL'&&p[0]!==kind)||(device!=='ALL'&&p[1]!==device))continue;
+      if(!keys[key])keys[key]={t:Array(24).fill(0),b:Array(24).fill(0)};
+      for(let h=0;h<24;h++)keys[key][slot][h]+=H[key][metric][h];}};
+    merge(hourSrcT(a),'t'); merge(a.hourlyBase||{},'b');});
+  const res=[];
+  for(const key in keys){const {t,b}=keys[key]; const hrs=[]; let lost=0;
+    for(let h=0;h<bh;h++){ if(b[h]>=MIN && t[h]<b[h]*0.5){ hrs.push(h); lost+=(b[h]-t[h]); } }
+    if(hrs.length){const p=key.split('|'); res.push({label:`${DL[p[1]]||p[1]}·${KL[p[0]]||p[0]}`,hrs,lost});}}
+  return res.sort((x,y)=>y.lost-x.lost);
+}
+function emptyH(){return {spend:Array(24).fill(0),imp:Array(24).fill(0),clk:Array(24).fill(0)};}
+function hourlyKeyed(){
+  const out={};
+  accountsInScope().forEach(a=>{[[hourSrcT(a),'t'],[a.hourlyBase||{},'b']].forEach(sp=>{
+    const H=sp[0]; for(const key in H){const p=key.split('|');
+      if((kind==='ALL'||p[0]===kind)&&(device==='ALL'||p[1]===device)){
+        if(!out[key])out[key]={t:emptyH(),b:emptyH()};
+        ['spend','imp','clk'].forEach(f=>{for(let h=0;h<24;h++)out[key][sp[1]][f][h]+=H[key][f][h];});}}});});
+  return out;
+}
+function hourGroups(m){
+  const keyed=hourlyKeyed(), all=Object.keys(keyed);
+  const aggH=keys=>{const t=Array(24).fill(0),b=Array(24).fill(0);
+    keys.forEach(k=>{for(let h=0;h<24;h++){t[h]+=keyed[k].t[m][h];b[h]+=keyed[k].b[m][h];}});return{t,b};};
+  if(hourBy==='all'){const s=aggH(all);return [{label:'',colT:'--s1',colB:'--muted',t:s.t,b:s.b}];}
+  const dim=hourBy==='device'?1:0;
+  const colMap=hourBy==='device'?{PC:'--pc',MO:'--mo',ETC:'--muted'}:{SA:'--sa',SS:'--ss',ETC:'--muted'};
+  const lblMap=hourBy==='device'?DL:KL, groups={};
+  all.forEach(k=>{const g=k.split('|')[dim];(groups[g]||(groups[g]=[])).push(k);});
+  return Object.keys(groups).sort().map(g=>{const s=aggH(groups[g]);
+    return {label:lblMap[g]||g,colT:colMap[g]||'--s1',colB:colMap[g]||'--muted',t:s.t,b:s.b};});
+}
+function renderHourly(){
+  hourSel=hourlyDayInfo();
+  const isDay=hourSel.mode==='day';
+  const bh=hourDoneIdx(), m=hourMetric;
+  const BL=D.hourlyBaseLabel||'기준선';
+  const curLbl=isDay?md(hourSel.day):'오늘';
+  const hint=document.getElementById('hourHint');
+  if(hint) hint.innerHTML=`${curLbl} vs ${BL}`+(isDay
+    ?' · <b>기간필터 일자 적용</b>'
+    :' · 완료된 시간대만 비교 · 기간필터를 하루(최근 7일 내)로 잡으면 그 날짜 표시');
+  const fmt=m==='spend'?won:int, fmtC=m==='spend'?krw:int;
+  const labels=Array.from({length:24},(_,h)=>String(h).padStart(2,'0'));
+  const ink=cvar('--ink2'),grid=cvar('--grid'),axis=cvar('--axis');
+  const groups=hourGroups(m);
+  const hasBase=groups.some(g=>g.b.some(v=>v>0));
+  const drops=hasBase?scanAnomalies(m):[], box=document.getElementById('hourAlert');
+  const doneLbl=isDay?'전일 24시간':`완료 시간대(${bh-1}시까지)`;
+  if(hourSel.miss){ box.className='alert info';
+    box.innerHTML=`ℹ️ ${md(hourSel.miss)} 시간대 데이터가 없어 <b>오늘</b> 기준으로 표시합니다 — 네이버 hh24는 최근 7일만 조회·보관 가능하며, 보관은 수집기 실행 시점부터 쌓입니다.`;
+  } else if(!hasBase){ box.className='alert info';
+    box.innerHTML=`ℹ️ 시간대별 기준선이 아직 없습니다 — ${curLbl} 시간대만 표시합니다. 수집기(<code>python naver_spend_collect.py</code>)를 실행하면 자동 생성됩니다.`;
+  } else if(drops.length){
+    const li=drops.slice(0,4).map(d=>`<b>${d.label}</b> ${d.hrs.map(h=>h+'시').join('·')} (예상손실 ${fmtC(d.lost)})`).join('<br>');
+    box.className='alert crit';
+    box.innerHTML=`⚠ <b>${BL}</b> 대비 <b>${curLbl} ${METL[m]} 급감</b> 감지 (${doneLbl}):<br>${li}`;
+  } else { box.className='alert ok'; box.innerHTML=`✓ ${curLbl} ${doneLbl} ${METL[m]} 흐름이 <b>${BL}</b>과 유사 — 특이 급감 없음.`; }
+  const datasets=[];
+  groups.forEach(g=>{const pre=g.label?g.label+' ':'';
+    datasets.push({label:pre+curLbl,data:g.t.map((v,h)=>h<bh?v:null),borderColor:cvar(g.colT),backgroundColor:'transparent',
+      borderWidth:2.5,tension:.3,pointRadius:0,pointHoverRadius:5,spanGaps:false});
+    if(hasBase) datasets.push({label:pre+BL,data:g.b,borderColor:cvar(g.colB),backgroundColor:'transparent',
+      borderWidth:1.5,borderDash:[5,4],tension:.3,pointRadius:0,pointHoverRadius:4});});
+  if(hourChart)hourChart.destroy();
+  const cv=document.getElementById('hourly'),bx=cv.parentElement;
+  cv.width=Math.max(320,bx.clientWidth); cv.height=bx.clientHeight||300;
+  hourChart=new Chart(cv,{type:'line',data:{labels,datasets},
+    options:{responsive:false,maintainAspectRatio:false,animation:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'top',align:'end',labels:{color:ink,boxWidth:10,boxHeight:10,usePointStyle:true,pointStyle:'line'}},
+        tooltip:{callbacks:{title:it=>it.length?it[0].label+'시~'+(+it[0].label+1)+'시':'',
+          label:c=>c.parsed.y==null?null:` ${c.dataset.label}: ${fmt(c.parsed.y)}`}}},
+      scales:{x:{grid:{display:false},border:{color:axis},ticks:{color:ink,maxRotation:0,autoSkip:true,maxTicksLimit:13}},
+        y:{grid:{color:grid},border:{display:false},ticks:{color:ink,callback:v=>fmtC(v)}}}}});
+}
+
+// ── 캠페인 표 ───────────────────────────────────────────────────────────
+function renderTable(){
+  let rows=selCampaigns().map(c=>{const e=eff5(campTotal(c,pFrom,pTo));
+    return Object.assign({},c,e,{tspend:c.today.spend});});
+  if(tblQuery){const q=tblQuery.trim().toLowerCase(); rows=rows.filter(c=>c.name.toLowerCase().includes(q));}
+  if(tblStatus==='active') rows=rows.filter(c=>c.status==='ELIGIBLE');
+  else if(tblStatus==='paused') rows=rows.filter(c=>c.status&&c.status!=='ELIGIBLE');
+  else if(tblStatus==='exhausted') rows=rows.filter(c=>c.budgetExhausted);
+  rows=rows.filter(c=>c.spend||c.imp||c.tspend||c.status==='ELIGIBLE');
+  const numK=new Set(['spend','tspend','dailyBudget','budgetUsedPct','imp','clk','ctr','cpc','cvr','cpa','roas']);
+  rows.sort((a,b)=>{let x=a[sortKey],y=b[sortKey];
+    if(sortKey==='budgetUsedPct'){x=x==null?-1:x;y=y==null?-1:y;}
+    if(numK.has(sortKey))return (x-y)*sortDir;
+    return String(x).localeCompare(String(y),'ko')*sortDir;});
+  let html=rows.map(c=>{
+    const paused=c.status&&c.status!=='ELIGIBLE';
+    const cls=[c.budgetExhausted?'warnrow':'',paused?'pausedrow':''].filter(Boolean).join(' ');
+    let bar; if(c.useDailyBudget&&c.dailyBudget){const p=c.budgetUsedPct||0,w=Math.min(p,100);
+      bar=`<div class="bar${p>=98?' over':''}"><span style="width:${w}%"></span></div><span class="pct">${p.toFixed(0)}%</span>`;
+    } else bar='<span class="bar-na">미설정</span>';
+    return `<tr class="${cls}">
+      <td class="l">${c.acct}</td>
+      <td class="l keep" title="${c.name}">${c.name}${c.budgetExhausted?' <span style="color:var(--critical);font-weight:700">⚠소진</span>':''}${paused?` <span class="ref">(${c.status})</span>`:''}</td>
+      <td class="l">${kindTag(c.kind)}</td><td class="l">${devTag(c.device)}</td>
+      <td class="num">${won(c.spend)}</td>
+      <td class="num ref">${won(c.tspend)}</td>
+      <td class="num ref">${c.useDailyBudget?won(c.dailyBudget):'—'}</td>
+      <td class="l">${bar}</td>
+      <td class="num">${int(c.imp)}</td><td class="num">${int(c.clk)}</td>
+      <td class="num">${c.ctr.toFixed(2)}%</td><td class="num">${won(Math.round(c.cpc))}</td>
+      <td class="num ref">${c.cvr?c.cvr.toFixed(2)+'%':'—'}</td>
+      <td class="num ref">${c.cpa?won(Math.round(c.cpa)):'—'}</td>
+      <td class="num ref">${c.roas?c.roas.toFixed(0)+'%':'—'}</td></tr>`;
+  }).join('');
+  const s=rows.reduce((o,c)=>{o.spend+=c.spend;o.tspend+=c.tspend;o.imp+=c.imp;o.clk+=c.clk;return o;},{spend:0,tspend:0,imp:0,clk:0});
+  const ctr=s.imp?s.clk/s.imp*100:0,cpc=s.clk?s.spend/s.clk:0;
+  const STL={active:'활성',paused:'중단',exhausted:'예산소진'};
+  const extra=[kind!=='ALL'?KL[kind]:null, device!=='ALL'?DL[device]:null,
+    tblStatus!=='all'?STL[tblStatus]:null, tblQuery.trim()?`"${tblQuery.trim()}"`:null].filter(Boolean);
+  const lbl=`합계 (${rows.length}캠페인${extra.length?' · '+extra.join(', '):''})`;
+  html+=`<tr class="subtot"><td class="l" colspan="4">${lbl}</td><td class="num">${won(s.spend)}</td>
+    <td class="num">${won(s.tspend)}</td><td></td><td></td>
+    <td class="num">${int(s.imp)}</td><td class="num">${int(s.clk)}</td><td class="num">${ctr.toFixed(2)}%</td>
+    <td class="num">${won(Math.round(cpc))}</td><td></td><td></td><td></td></tr>`;
+  document.querySelector('#camptbl tbody').innerHTML=html;
+  document.querySelectorAll('#camptbl th').forEach(th=>{th.onclick=()=>{const k=th.dataset.k;
+    if(k===sortKey)sortDir*=-1;else{sortKey=k;sortDir=(k==='name'||k==='acct'||k==='kind'||k==='device')?1:-1;}
+    renderTable();};});
+}
+
+// ══════════════ 시뮬레이터 ══════════════
+function fitPower(pts){ // pts=[[x,y]] (x>0,y>0) → y = a·x^b
+  const n=pts.length; if(n<4) return null;
+  let sx=0,sy=0,sxx=0,sxy=0;
+  pts.forEach(([x,y])=>{const lx=Math.log(x),ly=Math.log(y);sx+=lx;sy+=ly;sxx+=lx*lx;sxy+=lx*ly;});
+  const den=n*sxx-sx*sx; if(Math.abs(den)<1e-12) return null;
+  const b=(n*sxy-sx*sy)/den, lnA=(sy-b*sx)/n, a=Math.exp(lnA);
+  const my=sy/n; let ss=0,sr=0;
+  pts.forEach(([x,y])=>{const ly=Math.log(y),p=lnA+b*Math.log(x);ss+=(ly-my)*(ly-my);sr+=(ly-p)*(ly-p);});
+  return {a,b,r2:ss?Math.max(0,1-sr/ss):0,n};
+}
+const clicksAt=(f,x)=>f.a*Math.pow(x,f.b);
+const mcpcAt=(f,x)=>Math.pow(x,1-f.b)/(f.a*f.b);       // 한계CPC = 1/(dC/dx)
+const optSpend=(f,m)=>Math.pow(m*f.a*f.b,1/(1-f.b));   // 한계CPC=m 이 되는 지점
+function simPoints(camps){ // 완료일만(오늘 제외) · 소진>0 & 클릭>0
+  const cend=completedTo(), dm=agg(camps,pFrom,cend).dm, out=[];
+  for(const d in dm){const r=dm[d]; if(r[0]>0&&r[2]>0) out.push([r[0],r[2],r[4],d]);}
+  return out.sort((a,b)=>a[0]-b[0]);
+}
+function simModel(camps){
+  const pts=simPoints(camps);
+  const fit=fitPower(pts.map(p=>[p[0],p[1]]));
+  const rev=fitPower(pts.filter(p=>p[2]>0).map(p=>[p[0],p[2]]));
+  const xbar=pts.length?pts.reduce((s,p)=>s+p[0],0)/pts.length:0;
+  const cbar=pts.length?pts.reduce((s,p)=>s+p[1],0)/pts.length:0;
+  return {pts,fit,rev,xbar,cbar,avgCPC:cbar?xbar/cbar:0};
+}
+let simChart,mcChart;
+function simClear(msg){
+  const box=document.getElementById('simAlert');
+  box.className='alert info'; box.innerHTML=msg;
+  ['simCards','simSlideCards','allocAlert','simFoot'].forEach(id=>document.getElementById(id).innerHTML='');
+  document.querySelector('#simtbl tbody').innerHTML='';
+  document.querySelector('#alloctbl tbody').innerHTML='';
+  document.getElementById('allocChip').innerHTML='';
+  if(simChart){simChart.destroy();simChart=null;} if(mcChart){mcChart.destroy();mcChart=null;}
+}
+function renderSim(){
+  const camps=selCampaigns(), M=simModel(camps);
+  if(!M.fit || M.pts.length<5){
+    simClear(`데이터가 부족해 곡선을 추정할 수 없습니다 (완료일 <b>${M.pts.length}일</b>, 최소 5일 필요).
+      상단 <b>기간</b>을 넓히거나(전체·최근30일) 필터를 완화하세요.`);
+    return;
+  }
+  if(M.fit.b<=0){
+    simClear(`이 선택 구간에서는 소진과 클릭이 <b>역상관</b>(b=${M.fit.b.toFixed(2)})으로 나와 수확체감 모델을 적용할 수 없습니다.
+      기간 중 입찰·소재·타겟이 크게 바뀌었을 가능성이 큽니다 — 기간을 좁히거나 세그먼트를 나눠보세요.`);
+    return;
+  }
+  const f=M.fit, b=f.b, box=document.getElementById('simAlert');
+  const curMC=mcpcAt(f,M.xbar);
+  if(targetCPC==null) targetCPC=Math.round(curMC/10)*10;   // 기본=현재 한계CPC(=현 수준 유지)
+  document.getElementById('targetCPC').value=targetCPC;
+
+  const decay=b<0.98, sens=decay?1/(1-b):Infinity;
+  const xs=M.pts.map(p=>p[0]), xmin=Math.min(...xs), xmax=Math.max(...xs);
+  let xStar=decay?optSpend(f,targetCPC):null, clamped=null;
+  if(xStar!=null){ if(xStar<xmin){clamped='low';xStar=xmin;} else if(xStar>xmax){clamped='high';xStar=xmax;} }
+  const revStar=(M.rev&&M.rev.b<0.98&&M.rev.b>0)?Math.pow(M.rev.a*M.rev.b,1/(1-M.rev.b)):null;
+
+  // 재배분(총예산 고정) — 이 화면의 핵심 결론
+  const AL=allocation(camps);
+
+  if(AL&&AL.gain>0.005){
+    box.className='alert ok';
+    box.innerHTML=`✅ <b>총예산을 늘리지 않고도</b> 세그먼트 배분만 조정하면 일 클릭이
+      <b>+${int(AL.after-AL.before)}회 (+${(AL.gain*100).toFixed(1)}%)</b> 늘어날 여지가 있습니다.
+      한계CPC가 가장 싼 <b>${AL.best.label}</b>로 옮기고 가장 비싼 <b>${AL.worst.label}</b>에서 빼는 방향 — 아래 재배분 표 참고.`;
+  } else if(!decay){
+    box.className='alert ok';
+    box.innerHTML=`체감계수 b=<b>${b.toFixed(2)}</b> — 이 구간에서는 <b>수확체감이 관측되지 않습니다</b>.
+      소진을 늘려도 클릭이 거의 비례해 늘어난다는 뜻이라 증액 여지가 있습니다.
+      단, 관측 범위(${krw(xmin)}~${krw(xmax)}) 밖은 보장되지 않습니다.`;
+  } else {
+    box.className='alert info';
+    box.innerHTML=`현재 배분은 세그먼트 간 한계CPC가 이미 비슷해 <b>재배분 이득이 거의 없습니다</b>
+      (${AL?'+'+(AL.gain*100).toFixed(1)+'%':'세그먼트 부족'}). 남은 지렛대는 예산 <b>수준</b>과 CPC·CTR 개선입니다.`;
+  }
+
+  const r2c=f.r2>=0.7?'good':(f.r2>=0.4?'flat':'bad');
+  document.getElementById('simCards').innerHTML=`
+    <div class="tile"><div class="lab">수확체감 계수 <b>b</b> <span class="tag-time">표본 ${f.n}일</span></div>
+      <div class="big">${b.toFixed(2)}</div>
+      <div class="sub">${b<0.6?'강한 체감 — 돈을 늘려도 클릭이 잘 안 늘어남':b<0.85?'보통 체감':b<0.98?'약한 체감':'체감 미관측(선형에 가까움)'}
+        <br><span style="color:var(--muted)">소진 10% ↑ → 클릭 약 ${(Math.pow(1.1,b)*100-100).toFixed(1)}% ↑</span></div>
+      <div class="chiprow"><span class="delta ${r2c}">적합도 R² ${f.r2.toFixed(2)}</span></div></div>
+    <div class="tile"><div class="lab">배분 최적화 여지 <span style="font-weight:500;color:var(--muted)">총예산 고정</span></div>
+      <div class="big" style="color:${AL&&AL.gain>0.005?'var(--pc)':'var(--ink)'}">${AL?(AL.gain>0?'+':'')+int(AL.after-AL.before)+' 클릭':'—'}</div>
+      <div class="sub">${AL?`일 ${krw(AL.total)} 그대로 · <b>+${(AL.gain*100).toFixed(1)}%</b> ·
+        월 환산 +${int((AL.after-AL.before)*30)}클릭`:'세그먼트가 1개뿐이라 재배분 계산 불가 (유형·디바이스 필터를 전체로)'}</div></div>
+    <div class="tile"><div class="lab">현재 지점 한계CPC <span style="font-weight:500">일평균 ${krw(M.xbar)}</span></div>
+      <div class="big">${won(Math.round(curMC))}</div>
+      <div class="sub">지금 예산에서 <b>추가 클릭 1회</b>를 얻는 비용<br>
+        <span style="color:var(--muted)">평균 CPC ${won(Math.round(M.avgCPC))} · 한계 = 평균 ÷ b = ${(curMC/M.avgCPC).toFixed(2)}배</span></div></div>`;
+
+  // 예산 '수준' 결론은 민감도가 크므로 별도 배너로 경고와 함께
+  const ab=document.getElementById('allocAlert');
+  if(decay&&sens>6){
+    ab.className='alert crit';
+    ab.innerHTML=`⚠ <b>예산 '수준' 권고는 신뢰하지 마세요</b> — b=${b.toFixed(2)}로 1에 가까워
+      허용 한계CPC를 <b>1% 바꾸면 최적 예산이 ${sens.toFixed(0)}% 움직입니다</b>(수학적으로 불안정).
+      허용 한계CPC ${won(targetCPC)} 기준 계산값은 ${krw(xStar)}${clamped?` (관측범위 ${clamped==='low'?'하한':'상한'}으로 잘림)`:''}이지만,
+      이 숫자보다 <b>위의 재배분 결론과 세그먼트별 한계CPC 순위</b>가 훨씬 견고합니다.`;
+  } else if(decay){
+    const dir=xStar>M.xbar*1.05?'증액':(xStar<M.xbar*0.95?'감액':'유지');
+    ab.className=dir==='감액'?'alert crit':'alert info';
+    ab.innerHTML=`허용 한계CPC <b>${won(targetCPC)}</b> 기준 최적 총예산 <b>${krw(xStar)}</b> —
+      현재 일평균 ${krw(M.xbar)} 대비 <b>${dir}</b> ${krw(Math.abs(xStar-M.xbar))} (${((xStar/M.xbar-1)*100).toFixed(0)}%)
+      ${clamped?`<b>· 관측범위 ${clamped==='low'?'하한':'상한'}에서 잘림(외삽 방지)</b>`:''}`;
+  } else { ab.className='alert ok'; ab.innerHTML=`체감 미관측(b=${b.toFixed(2)}) — 최적 '수준'은 계산하지 않습니다.`; }
+
+  renderSimChart(M,f,xStar);
+  renderMcChart(M,f,xStar);
+  renderSimTable(M,f,xStar);
+  renderSlide(M,f);
+  renderAllocTable(AL,M);
+  document.getElementById('simFoot').innerHTML=
+    `<b>모델</b> 클릭 = a × 소진<sup>b</sup> — 일별 데이터 log-log 회귀 (${md(pFrom)}~${md(completedTo())} 완료일 ${f.n}일).
+     b&lt;1이면 수확체감. <b>한계CPC = 평균CPC ÷ b</b>. 재배분은 모든 세그먼트의 한계CPC를 같게 만드는 배분(등한계 원리)을 이분법으로 찾습니다.
+     <br><b style="color:var(--critical)">한계</b> ①상관관계일 뿐 인과가 아닙니다 — 시즌·프로모션·입찰/소재 변경·경쟁 상황이 모두 섞여 있고,
+     "예산을 늘려서 클릭이 는" 것인지 "수요가 좋아 예산도 클릭도 같이 는" 것인지 구분하지 못합니다.
+     ②관측 소진 범위(${krw(xmin)}~${krw(xmax)}) 밖은 외삽이라 신뢰도가 급락합니다.
+     ③R²가 높아도(현재 ${f.r2.toFixed(2)}) 일별 소진↔클릭은 CPC가 안정적이면 기계적으로 잘 맞습니다 — 적합도≠인과 강도.
+     ④결론을 실행할 땐 한 번에 크게 바꾸지 말고 <b>10~20%씩 이동 후 재측정</b>하세요.` +
+    (revStar?`<br><b>전환매출 곡선(참고)</b> 한계ROAS 100% 지점 ≈ ${krw(revStar)}/일 (b=${M.rev.b.toFixed(2)}, R²=${M.rev.r2.toFixed(2)}).
+      네이버 전환태그 과소계상으로 실제보다 낮게 나오므로 <b>하한선</b>으로만 보세요.`:'');
+}
+
+// ── 재배분(총예산 고정, 한계CPC 등화) ───────────────────────────────────
+function allocation(camps){
+  const models=segList().map(s=>{const cs=camps.filter(c=>c.kind===s.k&&c.device===s.d);
+    const M=simModel(cs); return {s,M,f:M.fit};}).filter(r=>r.f&&r.M.pts.length>=5&&r.M.xbar>0);
+  if(models.length<2) return null;
+  const S=models.map(r=>({r,x0:r.M.xbar,lo:r.M.xbar*0.4,hi:r.M.xbar*2.5}));
+  const total=S.reduce((a,s)=>a+s.x0,0);
+  const xof=(s,lam)=>{const f=s.r.f;
+    if(f.b>=0.999||f.b<=0) return lam>=mcpcAt(f,s.x0)?s.hi:s.lo;   // 체감 없으면 코너해
+    return Math.min(s.hi,Math.max(s.lo,Math.pow(lam*f.a*f.b,1/(1-f.b))));};
+  let lo=1,hi=1e8;
+  for(let i=0;i<300;i++){const mid=(lo+hi)/2;
+    (S.reduce((a,s)=>a+xof(s,mid),0)>total)?hi=mid:lo=mid;}
+  const lam=(lo+hi)/2;
+  S.forEach(s=>{s.x1=xof(s,lam);
+    s.capped=s.x1>=s.hi*0.999?'hi':(s.x1<=s.lo*1.001?'lo':null);});
+  const t1=S.reduce((a,s)=>a+s.x1,0);
+  if(t1>0) S.forEach(s=>s.x1*=total/t1);          // 클램프로 총액이 어긋나면 비례 보정
+  const before=S.reduce((a,s)=>a+clicksAt(s.r.f,s.x0),0);
+  const after=S.reduce((a,s)=>a+clicksAt(s.r.f,s.x1),0);
+  const byMC=[...S].sort((a,b)=>mcpcAt(a.r.f,a.x0)-mcpcAt(b.r.f,b.x0));
+  return {segs:S,lam,total,before,after,gain:before?after/before-1:0,
+    best:byMC[0].r.s,worst:byMC[byMC.length-1].r.s};
+}
+function renderAllocTable(AL,M){
+  const tb=document.querySelector('#alloctbl tbody'), chip=document.getElementById('allocChip');
+  if(!AL){ chip.innerHTML='';
+    tb.innerHTML=`<tr><td class="l" colspan="10" style="color:var(--muted)">
+      비교할 세그먼트가 2개 미만입니다 — 상단 <b>유형·디바이스</b> 필터를 '전체'로 두고, 기간을 넓혀보세요(각 세그먼트 5일 이상 필요).</td></tr>`;
+    return; }
+  chip.innerHTML=`총 <b>${krw(AL.total)}</b>/일 고정 · 목표 한계CPC <b>${won(Math.round(AL.lam))}</b> 균등화`;
+  const rows=[...AL.segs].sort((a,b)=>(b.x1-b.x0)-(a.x1-a.x0));
+  tb.innerHTML=rows.map(s=>{
+    const f=s.r.f, d=s.x1-s.x0, pct=s.x0?d/s.x0*100:0;
+    const dc=clicksAt(f,s.x1)-clicksAt(f,s.x0);
+    const act=pct>5?'<span class="tag tag-good">증액</span>':pct<-5?'<span class="tag tag-bad">감액</span>':'<span class="tag tag-etc">유지</span>';
+    const lowConf=f.r2<0.4?' <span class="ref" title="적합도 낮음">⚠R²</span>':'';
+    const cap=s.capped?` <span class="ref" title="한 번에 과도한 이동을 막는 ${s.capped==='hi'?'상한(2.5배)':'하한(0.4배)'} 제한에 걸림">🔒${s.capped==='hi'?'상한':'하한'}</span>`:'';
+    return `<tr><td class="l">${kindTag(s.r.s.k)} ${devTag(s.r.s.d)}${lowConf}${cap}</td>
+      <td class="num">${krw(s.x0)}</td><td class="num" style="font-weight:700">${krw(s.x1)}</td>
+      <td class="num" style="color:${d>0?'var(--pc)':d<0?'var(--critical)':'var(--muted)'}">${d>0?'+':''}${krw(d)}<br>
+        <span style="font-size:11px">${pct>0?'+':''}${pct.toFixed(0)}%</span></td>
+      <td class="num">${won(Math.round(mcpcAt(f,s.x0)))}</td>
+      <td class="num ref">${won(Math.round(mcpcAt(f,s.x1)))}</td>
+      <td class="num">${f.b.toFixed(2)}</td><td class="num ref">${f.r2.toFixed(2)}</td>
+      <td class="num" style="color:${dc>0?'var(--pc)':dc<0?'var(--critical)':'var(--muted)'}">${dc>0?'+':''}${int(dc)}</td>
+      <td class="l">${act}</td></tr>`;}).join('')
+    +`<tr class="subtot"><td class="l">합계</td><td class="num">${krw(AL.total)}</td><td class="num">${krw(AL.total)}</td>
+      <td class="num">±0</td><td colspan="4"></td>
+      <td class="num" style="color:var(--pc)">+${int(AL.after-AL.before)}</td>
+      <td class="l">+${(AL.gain*100).toFixed(1)}%</td></tr>`;
+}
+function curveData(f,x0,x1,n){const out=[];for(let i=0;i<=n;i++){const x=x0+(x1-x0)*i/n;out.push({x,y:clicksAt(f,x)});}return out;}
+function renderSimChart(M,f,xStar){
+  const ink=cvar('--ink2'),grid=cvar('--grid'),axis=cvar('--axis');
+  const xs=M.pts.map(p=>p[0]);
+  const x0=Math.min(...xs)*0.85, x1=Math.max(Math.max(...xs),xStar||0)*1.12;
+  const ds=[
+    {type:'line',label:'추정곡선',data:curveData(f,x0,x1,60),borderColor:cvar('--s1'),
+     borderWidth:2,pointRadius:0,tension:.2,fill:false},
+    {type:'scatter',label:'실제 일별',data:M.pts.map(p=>({x:p[0],y:p[1],d:p[3]})),
+     backgroundColor:cvar('--s2'),pointRadius:4,pointHoverRadius:6},
+  ];
+  if(xStar) ds.push({type:'line',label:'권장 예산',data:[{x:xStar,y:0},{x:xStar,y:clicksAt(f,xStar)}],
+    borderColor:cvar('--pc'),borderWidth:2,borderDash:[6,4],pointRadius:0});
+  ds.push({type:'line',label:'현재 일평균',data:[{x:M.xbar,y:0},{x:M.xbar,y:clicksAt(f,M.xbar)}],
+    borderColor:cvar('--muted'),borderWidth:1.5,borderDash:[3,3],pointRadius:0});
+  if(simChart)simChart.destroy();
+  const cv=document.getElementById('simChart'),bx=cv.parentElement;
+  cv.width=Math.max(320,bx.clientWidth); cv.height=bx.clientHeight||300;
+  simChart=new Chart(cv,{data:{datasets:ds},options:{responsive:false,maintainAspectRatio:false,animation:false,
+    plugins:{legend:{position:'top',align:'end',labels:{color:ink,boxWidth:10,boxHeight:10,usePointStyle:true}},
+      tooltip:{callbacks:{label:c=>c.raw.d?` ${c.raw.d}: ${won(c.parsed.x)} → ${int(c.parsed.y)}클릭`
+        :` ${krw(c.parsed.x)} → ${int(c.parsed.y)}클릭`}}},
+    scales:{x:{type:'linear',min:x0,max:x1,grid:{color:grid},border:{color:axis},
+        title:{display:true,text:'일 소진액',color:ink,font:{size:11}},ticks:{color:ink,callback:v=>krw(v)}},
+      y:{beginAtZero:true,grid:{color:grid},border:{display:false},
+        title:{display:true,text:'일 클릭수',color:ink,font:{size:11}},ticks:{color:ink,callback:v=>int(v)}}}}});
+}
+function renderMcChart(M,f,xStar){
+  const ink=cvar('--ink2'),grid=cvar('--grid'),axis=cvar('--axis');
+  const xs=M.pts.map(p=>p[0]);
+  const x0=Math.min(...xs)*0.6, x1=Math.max(Math.max(...xs),xStar||0)*1.4;
+  const line=[];for(let i=0;i<=60;i++){const x=x0+(x1-x0)*i/60;line.push({x,y:mcpcAt(f,x)});}
+  const ds=[{type:'line',label:'한계CPC',data:line,borderColor:cvar('--critical'),borderWidth:2.5,pointRadius:0,tension:.2},
+    {type:'line',label:`허용 한계CPC ${won(targetCPC)}`,data:[{x:x0,y:targetCPC},{x:x1,y:targetCPC}],
+     borderColor:cvar('--pc'),borderWidth:1.5,borderDash:[6,4],pointRadius:0},
+    {type:'line',label:'평균 CPC',data:[{x:x0,y:M.avgCPC},{x:x1,y:M.avgCPC}],
+     borderColor:cvar('--muted'),borderWidth:1.2,borderDash:[3,3],pointRadius:0}];
+  if(mcChart)mcChart.destroy();
+  const cv=document.getElementById('mcChart'),bx=cv.parentElement;
+  cv.width=Math.max(320,bx.clientWidth); cv.height=bx.clientHeight||300;
+  mcChart=new Chart(cv,{data:{datasets:ds},options:{responsive:false,maintainAspectRatio:false,animation:false,
+    interaction:{mode:'nearest',intersect:false},
+    plugins:{legend:{position:'top',align:'end',labels:{color:ink,boxWidth:10,boxHeight:10,usePointStyle:true}},
+      tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${won(c.parsed.y)} @ 일예산 ${krw(c.parsed.x)}`}}},
+    scales:{x:{type:'linear',min:x0,max:x1,grid:{color:grid},border:{color:axis},
+        title:{display:true,text:'일 소진액',color:ink,font:{size:11}},ticks:{color:ink,callback:v=>krw(v)}},
+      y:{grid:{color:grid},border:{display:false},
+        title:{display:true,text:'한계 CPC(원)',color:ink,font:{size:11}},ticks:{color:ink,callback:v=>krw(v)}}}}});
+}
+function renderSimTable(M,f,xStar){
+  const base=M.xbar, baseC=clicksAt(f,base);
+  const rows=[['-30%',base*0.7],['-10%',base*0.9],['현재 일평균',base],['+10%',base*1.1],['+30%',base*1.3]];
+  if(xStar) rows.push([`권장(한계CPC ${won(targetCPC)})`,xStar]);
+  rows.sort((a,b)=>a[1]-b[1]);
+  document.querySelector('#simtbl tbody').innerHTML=rows.map(([lab,x])=>{
+    const c=clicksAt(f,x), dC=c-baseC, dX=x-base;
+    const inc=Math.abs(dC)>0.5?dX/dC:null;
+    const cur=Math.abs(x-base)<1;
+    return `<tr${cur?' style="font-weight:750;background:color-mix(in srgb,var(--ink) 4%,transparent)"':''}>
+      <td class="l">${lab}</td><td class="num">${krw(x)}</td><td class="num">${int(c)}</td>
+      <td class="num">${won(Math.round(x/c))}</td><td class="num">${won(Math.round(mcpcAt(f,x)))}</td>
+      <td class="num" style="color:${dC>0?'var(--pc)':dC<0?'var(--critical)':'var(--muted)'}">${dC>0?'+':''}${int(dC)}</td>
+      <td class="num ref">${inc?won(Math.round(inc)):'—'}</td></tr>`;}).join('');
+}
+function renderSlide(M,f){
+  const s=document.getElementById('simSlider');
+  const x=M.xbar*slidePct/100, c=clicksAt(f,x), base=clicksAt(f,M.xbar);
+  s.value=slidePct;
+  document.getElementById('simSlideChip').innerHTML=`현재 일평균의 <b>${slidePct}%</b>`;
+  document.getElementById('simSlideCards').innerHTML=`
+    <div class="tile"><div class="lab">일예산</div><div class="big">${krw(x)}</div>
+      <div class="sub">월 환산 ${krw(x*30)} <span style="color:var(--muted)">· 현재 ${krw(M.xbar)}</span></div></div>
+    <div class="tile"><div class="lab">예상 일 클릭</div><div class="big">${int(c)}</div>
+      <div class="sub" style="color:${c>=base?'var(--pc)':'var(--critical)'}">${c>=base?'+':''}${int(c-base)} vs 현재 ${int(base)}</div></div>
+    <div class="tile"><div class="lab">평균 CPC / 한계 CPC</div>
+      <div class="big">${won(Math.round(x/c))} <span style="font-size:16px;color:var(--muted)">/ ${won(Math.round(mcpcAt(f,x)))}</span></div>
+      <div class="sub">${mcpcAt(f,x)>targetCPC?`<span style="color:var(--critical);font-weight:700">허용 한계CPC(${won(targetCPC)}) 초과 — 과투자 구간</span>`
+        :'<span style="color:var(--pc);font-weight:700">허용 한계CPC 이내 — 추가 투자 여지</span>'}</div></div>`;
+}
+function segList(){
+  const out=[];
+  const kinds=kind==='ALL'?['SA','SS']:[kind], devs=device==='ALL'?['PC','MO']:[device];
+  kinds.forEach(k=>devs.forEach(d=>out.push({k,d,label:`${KL[k]||k} · ${DL[d]||d}`})));
+  return out;
+}
+// ══════════════ 어제자 키워드 이슈 (일간 다이제스트, 전기간 비교 없음) ══════════════
+let _kwdCache={key:null,rows:null};
+function kwDailyRows(){
+  if(!KWD) return [];
+  const ck=scope+'|'+kind+'|'+device;
+  if(_kwdCache.key===ck) return _kwdCache.rows;
+  const C=KWD.cols, ix={}; C.forEach((c,i)=>ix[c]=i);
+  const out=[];
+  KWD.accounts.forEach(a=>{ if(scope!=='ALL'&&a.name!==scope) return;
+    a.keywords.forEach(r=>{
+      const k={acct:a.name,kw:r[ix.kw],camp:r[ix.camp],grp:r[ix.grp],kind:r[ix.kind],device:r[ix.device],
+        bid:r[ix.bid],imp:r[ix.imp],clk:r[ix.clk],cost:r[ix.cost],conv:r[ix.conv],convAmt:r[ix.convAmt],rnk:r[ix.rnk]};
+      if(kind!=='ALL'&&k.kind!==kind) return;
+      if(device!=='ALL'&&k.device!==device) return;
+      k.ctr=k.imp?k.clk/k.imp*100:0; k.cpc=k.clk?k.cost/k.clk:0;
+      k.cpa=k.conv?k.cost/k.conv:0; k.roas=k.cost?k.convAmt/k.cost*100:0;
+      out.push(k);
+    });});
+  _kwdCache={key:ck,rows:out};
+  return out;
+}
+function kwdCard(k,color,line2){
+  return `<div class="kwcard" style="border-left:3px solid ${cvar(color)}">
+    <div class="k" title="${k.kw}">${k.kw} <span style="font-weight:500;color:var(--muted)">${k.acct}</span></div>
+    <div class="m">${krw(k.cost)} · ${int(k.clk)}클릭 · CPC ${won(Math.round(k.cpc))}</div>
+    <div class="m" style="color:var(--muted)">${line2}</div>
+    <div class="m" style="color:var(--muted)">${k.camp}</div></div>`;
+}
+function kwDailyHTML(){
+  if(!KWD) return `<div class="alert info" style="margin-top:16px">
+    ℹ️ <b>어제 키워드 이슈</b>를 보려면 <code>python naver_kw_daily.py</code> 를 실행하세요
+    (어제 1일 실적 · 키워드 목록은 캐시 재사용이라 계정당 수 분).</div>`;
+  const rows=kwDailyRows();
+  const tot=rows.reduce((o,k)=>{o.cost+=k.cost;o.clk+=k.clk;o.imp+=k.imp;o.conv+=k.conv;o.convAmt+=k.convAmt;return o;},
+    {cost:0,clk:0,imp:0,conv:0,convAmt:0});
+  const MIN=10000;
+  const active=rows.filter(k=>k.cost>0);
+  const spendTop=[...rows].sort((a,b)=>b.cost-a.cost).slice(0,10);
+  const convTop=rows.filter(k=>k.conv>0).sort((a,b)=>b.convAmt-a.convAmt||b.conv-a.conv).slice(0,8);
+  const waste=rows.filter(k=>k.cost>=MIN*3&&!k.conv).sort((a,b)=>b.cost-a.cost).slice(0,8);
+  const shr=v=>tot.cost?(v/tot.cost*100).toFixed(1)+'%':'—';
+  const spendRows=spendTop.map((k,i)=>`<tr>
+    <td class="l">${i+1}</td><td class="l" title="${k.kw}">${k.kw}</td>
+    <td class="l">${k.acct}</td><td class="l">${kindTag(k.kind)}${devTag(k.device)}</td>
+    <td>${won(k.cost)}</td><td>${shr(k.cost)}</td>
+    <td>${int(k.clk)}</td><td>${won(Math.round(k.cpc))}</td>
+    <td>${k.conv?int(k.conv):'—'}</td><td>${k.rnk?k.rnk:'—'}</td></tr>`).join('');
+  return `
+  <div class="alert info" style="margin-top:16px">
+    ⚡ <b>어제(${md(KWD.day)}) 키워드 이슈</b>
+    · 수집 ${KWD.generated} <span style="color:var(--muted)">— 갱신: <code>python naver_kw_daily.py</code></span>
+  </div>
+  <div class="tiles">
+    <div class="tile"><div class="lab">어제 키워드 비용</div><div class="val">${krw(tot.cost)}</div>
+      <div class="sub">소진 키워드 ${int(active.length)}개</div></div>
+    <div class="tile"><div class="lab">클릭 / CPC</div><div class="val">${int(tot.clk)} <small>클릭</small></div>
+      <div class="sub">평균 CPC ${won(tot.clk?Math.round(tot.cost/tot.clk):0)} · CTR ${(tot.imp?tot.clk/tot.imp*100:0).toFixed(2)}%</div></div>
+    <div class="tile"><div class="lab">전환 <span style="font-weight:500;color:var(--muted)">·참고</span></div>
+      <div class="val">${int(tot.conv)}</div>
+      <div class="sub">전환매출 ${krw(tot.convAmt)} · ROAS ${tot.cost?Math.round(tot.convAmt/tot.cost*100):0}%</div></div>
+    <div class="tile"><div class="lab">노출 키워드</div><div class="val">${int(rows.length)}</div>
+      <div class="sub">현재 필터 기준</div></div>
+  </div>
+  <div class="panel tight">
+    <div class="ph"><h2>💸 어제 소진 TOP 10 <span class="hint">현재 필터 기준 · 점유율 = 어제 키워드 비용 대비</span></h2></div>
+    <div class="tblwrap"><table><thead><tr>
+      <th class="l">#</th><th class="l">키워드</th><th class="l">계정</th><th class="l">유형·기기</th>
+      <th>비용</th><th>점유율</th><th>클릭</th><th>CPC</th><th>전환</th><th>순위</th>
+    </tr></thead><tbody>${spendRows||'<tr><td colspan="10" class="empty">데이터 없음</td></tr>'}</tbody></table></div>
+  </div>
+  <div class="grid2">
+    <div class="panel tight"><div class="ph"><h2>🎯 전환 우수 <span class="hint">어제 전환 발생 · 전환매출순 · 네이버 전환태그(과소계상) 참고용</span></h2></div>
+      <div class="kwcards">${convTop.map(k=>kwdCard(k,'--pc',
+        `전환 ${int(k.conv)} · 매출 ${krw(k.convAmt)} · ROAS ${Math.round(k.roas)}% · CPA ${won(Math.round(k.cpa))}`)).join('')||'<div class="empty">해당 없음</div>'}</div></div>
+    <div class="panel tight"><div class="ph"><h2>💧 고비용 무전환 <span class="hint">어제 ${won(MIN*3)}↑ & 전환 0 · 비용순</span></h2></div>
+      <div class="kwcards">${waste.map(k=>kwdCard(k,'--ss',
+        `CTR ${k.ctr.toFixed(2)}%${k.rnk?` · 순위 ${k.rnk}`:''}`)).join('')||'<div class="empty">해당 없음</div>'}</div></div>
+  </div>`;
+}
+
+// ══════════════ 키워드 ══════════════
+let _kwCache={key:null,rows:null};
+function kwRows(){
+  if(!KW) return [];
+  const ck=scope+'|'+kind+'|'+device;
+  if(_kwCache.key===ck) return _kwCache.rows;      // 검색어 입력마다 수만 행 재구성 방지
+  const C=KW.cols, ix={}; C.forEach((c,i)=>ix[c]=i);
+  const out=[];
+  KW.accounts.forEach(a=>{ if(scope!=='ALL'&&a.name!==scope) return;
+    a.keywords.forEach(r=>{
+      const k={acct:a.name,kw:r[ix.kw],camp:r[ix.camp],grp:r[ix.grp],kind:r[ix.kind],device:r[ix.device],
+        bid:r[ix.bid],imp:r[ix.imp],clk:r[ix.clk],cost:r[ix.cost],conv:r[ix.conv],convAmt:r[ix.convAmt],
+        rnk:r[ix.rnk],pImp:r[ix.pImp],pClk:r[ix.pClk],pCost:r[ix.pCost],pConv:r[ix.pConv],pConvAmt:r[ix.pConvAmt]};
+      if(kind!=='ALL'&&k.kind!==kind) return;
+      if(device!=='ALL'&&k.device!==device) return;
+      k.ctr=k.imp?k.clk/k.imp*100:0; k.cpc=k.clk?k.cost/k.clk:0;
+      k.pctr=k.pImp?k.pClk/k.pImp*100:0; k.pcpc=k.pClk?k.pCost/k.pClk:0;
+      k.cpa=k.conv?k.cost/k.conv:0; k.roas=k.cost?k.convAmt/k.cost*100:0;
+      k.dCost=k.cost-k.pCost; k.dCpc=k.cpc-k.pcpc; k.dClk=k.clk-k.pClk;
+      out.push(k);
+    });});
+  _kwCache={key:ck,rows:out};
+  return out;
+}
+function median(arr){ if(!arr.length)return 0; const a=[...arr].sort((x,y)=>x-y);
+  const m=a.length>>1; return a.length%2?a[m]:(a[m-1]+a[m])/2; }
+function gradeKw(rows){
+  const act=rows.filter(k=>k.clk>=3);
+  const mCPC=median(act.map(k=>k.cpc).filter(Boolean))||0;
+  const mCTR=median(act.map(k=>k.ctr).filter(Boolean))||0;
+  rows.forEach(k=>{
+    k.grade='—';
+    if(k.clk<3){k.grade='소량';return;}
+    const cheap=k.cpc<=mCPC, hot=k.ctr>=mCTR;
+    if(k.conv>0&&cheap) k.grade='우수';
+    else if(cheap&&hot) k.grade='우수';
+    else if(k.cpc>mCPC*1.3&&!hot) k.grade='비효율';
+    else k.grade='보통';
+  });
+  return {mCPC,mCTR};
+}
+function renderKw(){
+  const body=document.getElementById('kwBody');
+  const digest=kwDailyHTML();
+  if(!KW){
+    body.innerHTML=digest+`<div class="panel"><div class="empty">
+      7일 스냅샷 데이터가 없습니다 (위 '어제 이슈'와 별개).<br>
+      터미널에서 <code>python naver_kw_collect.py</code> 를 실행하세요 (기본: 최근 7일 + 직전 7일 비교).<br>
+      <span style="font-size:12px">기간 조정: <code>python naver_kw_collect.py --days 30</code></span></div></div>`;
+    return;
+  }
+  const rows=kwRows(); const med=gradeKw(rows);
+  const tot=rows.reduce((o,k)=>{o.cost+=k.cost;o.clk+=k.clk;o.imp+=k.imp;o.conv+=k.conv;o.pCost+=k.pCost;return o;},
+    {cost:0,clk:0,imp:0,conv:0,pCost:0});
+  const good=rows.filter(k=>k.grade==='우수').sort((a,b)=>b.cost-a.cost);
+  const bad=rows.filter(k=>k.grade==='비효율').sort((a,b)=>b.cost-a.cost);
+  const P=KW.period, PV=KW.prev;
+  body.innerHTML=digest+`
+  <div class="alert info" style="margin-top:16px">
+    📌 키워드 스냅샷 <b>${P.since} ~ ${P.until}</b> (${P.days}일) · 비교 대상 <b>${PV.since} ~ ${PV.until}</b> ·
+    수집 ${KW.generated} <span style="color:var(--muted)">— 상단 기간필터와 무관합니다. 기간을 바꾸려면
+    <code>python naver_kw_collect.py --days N</code> 재실행.</span>
+  </div>
+  <div class="tiles">
+    <div class="tile"><div class="lab">키워드 (노출 발생)</div><div class="val">${int(rows.length)}</div>
+      <div class="sub">우수 ${int(good.length)} · 비효율 ${int(bad.length)}</div></div>
+    <div class="tile"><div class="lab">기간 비용</div><div class="val">${krw(tot.cost)} ${effDelta(tot.cost,tot.pCost,'rel',null)}</div>
+      <div class="sub">직전 ${krw(tot.pCost)}</div></div>
+    <div class="tile"><div class="lab">클릭 / CPC</div><div class="val">${int(tot.clk)} <small>클릭</small></div>
+      <div class="sub">평균 CPC ${won(tot.clk?Math.round(tot.cost/tot.clk):0)} · CTR ${(tot.imp?tot.clk/tot.imp*100:0).toFixed(2)}%</div></div>
+    <div class="tile"><div class="lab">기준 중앙값 <span style="font-weight:500;color:var(--muted)">등급 산정용</span></div>
+      <div class="val sm">CPC ${won(Math.round(med.mCPC))}</div>
+      <div class="sub">CTR ${med.mCTR.toFixed(2)}% · 클릭 3회 이상 키워드 기준</div></div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel tight"><div class="ph"><h2>🔥 우수 키워드 <span class="hint">CPC 중앙값 이하 + (CTR 상위 또는 전환 발생) · 비용순</span></h2></div>
+      <div class="kwcards">${good.slice(0,12).map(k=>kwCard(k,'good')).join('')||'<div class="empty">해당 없음</div>'}</div></div>
+    <div class="panel tight"><div class="ph"><h2>💧 비효율 키워드 <span class="hint">CPC 중앙값 1.3배 초과 + CTR 하위 · 비용순</span></h2></div>
+      <div class="kwcards">${bad.slice(0,12).map(k=>kwCard(k,'bad')).join('')||'<div class="empty">해당 없음</div>'}</div></div>
+  </div>
+
+  <div class="panel">
+    <div class="ph"><h2>비용 vs CPC 분포 <span class="hint">점 크기 = 클릭수 · 오른쪽 아래(비용↑ CPC↓)가 효자 키워드</span></h2></div>
+    <div class="chartbox tall"><canvas id="kwScatter"></canvas></div>
+  </div>
+
+  <div class="panel">
+    <div class="ph"><h2>키워드 상세 <span class="hint">헤더 클릭 = 정렬 · 상위 300개 표시(전체는 CSV)</span></h2>
+      <div class="tblctl">
+        <input id="kwSearch" class="search" type="text" placeholder="🔍 키워드/캠페인 검색" value="${kwQuery.replace(/"/g,'&quot;')}" autocomplete="off">
+        <div class="seg" id="kwGradeSeg"></div>
+      </div>
+    </div>
+    <div class="tblwrap"><table id="kwtbl"><thead><tr>
+      <th class="l" data-k="kw">키워드</th><th class="l" data-k="camp">캠페인</th>
+      <th class="l" data-k="kind">유형</th><th class="l" data-k="device">기기</th>
+      <th data-k="cost">비용</th><th data-k="dCost">비용 증감</th>
+      <th data-k="imp">노출</th><th data-k="clk">클릭</th><th data-k="ctr">CTR</th>
+      <th data-k="cpc">CPC</th><th data-k="dCpc">CPC 증감</th>
+      <th data-k="rnk">평균순위</th><th data-k="bid">입찰가</th>
+      <th data-k="conv">전환<span class="ref">·참고</span></th><th data-k="roas">ROAS<span class="ref">·참고</span></th>
+      <th class="l" data-k="grade">등급</th>
+    </tr></thead><tbody></tbody></table></div>
+    <div class="foot">등급은 <b>현재 필터 안의 중앙값</b> 기준 상대평가입니다(클릭 3회 미만은 '소량'으로 제외).
+      전환·ROAS는 네이버 전환태그 과소계상으로 참고용 · 평균순위는 파워링크만 제공됩니다.</div>
+  </div>`;
+  seg('kwGradeSeg',[['all','전체'],['우수','우수'],['보통','보통'],['비효율','비효율'],['소량','소량']],kwGrade,
+    v=>{kwGrade=v;renderKwTable();},{});
+  const si=document.getElementById('kwSearch');
+  si.oninput=e=>{kwQuery=e.target.value;renderKwTable();};
+  renderKwTable(); renderKwScatter(rows);
+}
+function kwCard(k,cls){
+  const c=cls==='good'?'--pc':'--critical';
+  return `<div class="kwcard" style="border-left:3px solid ${cvar(c)}">
+    <div class="k" title="${k.kw}">${k.kw}</div>
+    <div class="m">${krw(k.cost)} · ${int(k.clk)}클릭 · CPC ${won(Math.round(k.cpc))}</div>
+    <div class="m" style="color:var(--muted)">CTR ${k.ctr.toFixed(2)}%${k.conv?` · 전환 ${int(k.conv)}`:''}${k.rnk?` · 순위 ${k.rnk}`:''}</div>
+    <div class="m" style="color:var(--muted)">${k.camp}</div></div>`;
+}
+function renderKwTable(){
+  let rows=kwRows(); gradeKw(rows);
+  if(kwGrade!=='all') rows=rows.filter(k=>k.grade===kwGrade);
+  if(kwQuery.trim()){const q=kwQuery.trim().toLowerCase();
+    rows=rows.filter(k=>k.kw.toLowerCase().includes(q)||k.camp.toLowerCase().includes(q)||k.grp.toLowerCase().includes(q));}
+  const strK=new Set(['kw','camp','kind','device','grade']);
+  rows.sort((a,b)=>strK.has(kwSort)?String(a[kwSort]).localeCompare(String(b[kwSort]),'ko')*kwDir
+    :((a[kwSort]||0)-(b[kwSort]||0))*kwDir);
+  const shown=rows.slice(0,300);
+  const gtag=g=>g==='우수'?'<span class="tag tag-good">우수</span>':g==='비효율'?'<span class="tag tag-bad">비효율</span>'
+    :g==='소량'?'<span class="tag tag-etc">소량</span>':'<span class="tag tag-etc">보통</span>';
+  const dcell=(v,fmt,good)=>{const col=v>0?(good?'var(--pc)':'var(--critical)'):v<0?(good?'var(--critical)':'var(--pc)'):'var(--muted)';
+    return `<td class="num" style="color:${col}">${v>0?'+':''}${fmt(v)}</td>`;};
+  document.querySelector('#kwtbl tbody').innerHTML=shown.map(k=>`<tr>
+    <td class="l keep" title="${k.kw}">${k.kw}</td><td class="l ref" title="${k.camp} / ${k.grp}">${k.camp}</td>
+    <td class="l">${kindTag(k.kind)}</td><td class="l">${devTag(k.device)}</td>
+    <td class="num">${won(k.cost)}</td>${dcell(k.dCost,v=>krw(Math.abs(v)),true)}
+    <td class="num">${int(k.imp)}</td><td class="num">${int(k.clk)}</td><td class="num">${k.ctr.toFixed(2)}%</td>
+    <td class="num">${won(Math.round(k.cpc))}</td>${dcell(Math.round(k.dCpc),v=>won(Math.abs(v)),false)}
+    <td class="num ref">${k.rnk||'—'}</td><td class="num ref">${k.bid?won(k.bid):'—'}</td>
+    <td class="num ref">${k.conv||'—'}</td><td class="num ref">${k.roas?k.roas.toFixed(0)+'%':'—'}</td>
+    <td class="l">${gtag(k.grade)}</td></tr>`).join('')
+    +`<tr class="subtot"><td class="l" colspan="4">표시 ${shown.length} / 전체 ${rows.length}개 (전체는 CSV 다운로드)</td>
+      <td class="num">${won(rows.reduce((s,k)=>s+k.cost,0))}</td><td></td>
+      <td class="num">${int(rows.reduce((s,k)=>s+k.imp,0))}</td><td class="num">${int(rows.reduce((s,k)=>s+k.clk,0))}</td>
+      <td colspan="8"></td></tr>`;
+  document.querySelectorAll('#kwtbl th').forEach(th=>{th.onclick=()=>{const k=th.dataset.k;
+    if(k===kwSort)kwDir*=-1;else{kwSort=k;kwDir=new Set(['kw','camp','kind','device','grade']).has(k)?1:-1;}
+    renderKwTable();};});
+}
+let kwChart;
+function renderKwScatter(rows){
+  const cv=document.getElementById('kwScatter'); if(!cv)return;
+  const ink=cvar('--ink2'),grid=cvar('--grid'),axis=cvar('--axis');
+  const pts=rows.filter(k=>k.cost>0&&k.cpc>0).sort((a,b)=>b.cost-a.cost).slice(0,600);
+  const mk=(g,col)=>({label:g,data:pts.filter(k=>k.grade===g).map(k=>({x:k.cost,y:k.cpc,r:Math.min(14,3+Math.sqrt(k.clk)),kw:k.kw,clk:k.clk})),
+    backgroundColor:col+'bb',borderColor:col,borderWidth:0});
+  const ds=[mk('우수',cvar('--pc')),mk('보통',cvar('--s1')),mk('비효율',cvar('--critical')),mk('소량',cvar('--muted'))]
+    .filter(d=>d.data.length);
+  if(kwChart)kwChart.destroy();
+  const bx=cv.parentElement; cv.width=Math.max(320,bx.clientWidth); cv.height=bx.clientHeight||300;
+  kwChart=new Chart(cv,{type:'bubble',data:{datasets:ds},options:{responsive:false,maintainAspectRatio:false,animation:false,
+    plugins:{legend:{position:'top',align:'end',labels:{color:ink,boxWidth:10,boxHeight:10,usePointStyle:true}},
+      tooltip:{callbacks:{label:c=>` ${c.raw.kw}: ${won(c.parsed.x)} · CPC ${won(c.parsed.y)} · ${int(c.raw.clk)}클릭`}}},
+    scales:{x:{type:'logarithmic',grid:{color:grid},border:{color:axis},
+        title:{display:true,text:'비용(원, 로그)',color:ink,font:{size:11}},ticks:{color:ink,callback:v=>krw(v)}},
+      y:{grid:{color:grid},border:{display:false},
+        title:{display:true,text:'CPC(원)',color:ink,font:{size:11}},ticks:{color:ink,callback:v=>krw(v)}}}}});
+}
+
+// ── 오케스트레이션 ──────────────────────────────────────────────────────
+function renderAll(){
+  if(pFrom>pTo){const t=pFrom;pFrom=pTo;pTo=t;}
+  pFrom=clampD(pFrom,ASTART,TODAY); pTo=clampD(pTo,ASTART,TODAY);
+  renderHeader();
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));
+  document.getElementById('v-'+view).classList.add('on');
+  document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===view));
+  if(view==='spend'){renderTiles();renderAcctBar();renderTrend();renderHourly();renderTable();}
+  else if(view==='sim'){renderSim();}
+  else {renderKw();}
+}
+document.getElementById('nav').onclick=e=>{const b=e.target.closest('button'); if(!b)return;
+  view=b.dataset.v; renderAll();};
+document.getElementById('themeBtn').onclick=()=>{
+  const cur=document.documentElement.getAttribute('data-theme');
+  const next=cur==='dark'?'light':(cur==='light'?'dark':'dark');
+  document.documentElement.setAttribute('data-theme',next);
+  try{localStorage.setItem('nvspend-theme',next);}catch(e){}
+  renderAll();
+};
+document.getElementById('csvBtn').onclick=()=>{ if(view==='kw'){ if(KW)exportKwCSV(); else alert('키워드 데이터가 없습니다. python naver_kw_collect.py 실행 후 이용하세요.'); }
+  else exportSpendCSV(); };
+document.getElementById('dFrom').onchange=e=>{pFrom=e.target.value||pFrom;preset='custom';renderAll();};
+document.getElementById('dTo').onchange=e=>{pTo=e.target.value||pTo;preset='custom';renderAll();};
+document.getElementById('targetCPC').onchange=e=>{const v=+e.target.value; if(v>0){targetCPC=v;renderSim();}};
+document.getElementById('resetCPC').onclick=()=>{targetCPC=null;renderSim();};
+document.getElementById('avgCPCBtn').onclick=()=>{const M=simModel(selCampaigns());
+  if(M.avgCPC){targetCPC=Math.round(M.avgCPC/10)*10;renderSim();}};
+document.getElementById('simSlider').oninput=e=>{slidePct=+e.target.value;
+  const M=simModel(selCampaigns()); if(M.fit)renderSlide(M,M.fit);};
+(function(){try{const t=localStorage.getItem('nvspend-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+let rzT;window.addEventListener('resize',()=>{clearTimeout(rzT);rzT=setTimeout(renderAll,220);});
+(function(){const si=document.getElementById('tblSearch'); if(si) si.oninput=e=>{tblQuery=e.target.value;renderTable();};})();
+if(D)renderAll();
+</script>
+</body>
+</html>
