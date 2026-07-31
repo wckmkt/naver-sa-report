@@ -355,7 +355,8 @@ code{background:color-mix(in srgb,var(--ink) 7%,transparent);padding:1px 6px;bor
   var v = Date.now();
   var files = ['naver_spend_data.js',
     ['naver_kw_data.js', 'window.__kwMissing=1'],
-    ['naver_kw_daily_data.js', 'window.__kwdMissing=1']];
+    ['naver_kw_daily_data.js', 'window.__kwdMissing=1'],
+    ['airbridge_conv_data.js', 'window.__abMissing=1']];
   files.forEach(function(f){
     var src = Array.isArray(f) ? f[0] : f, onerr = Array.isArray(f) ? f[1] : '';
     document.write('<script src="' + src + '?v=' + v + '"' +
@@ -367,6 +368,7 @@ code{background:color-mix(in srgb,var(--ink) 7%,transparent);padding:1px 6px;bor
 const D = window.NAVER_SPEND;
 const KW = window.NAVER_KW || null;
 const KWD = window.NAVER_KW_DAILY || null;
+const AB = window.AIRBRIDGE_CONV || null;
 if(!D){ document.body.innerHTML='<div class="wrap"><h1>데이터 없음</h1><p>naver_spend_collect.py를 먼저 실행하세요.</p></div>'; }
 
 const KL=(D&&D.kinds)||{SA:'파워링크',SS:'쇼핑검색',ETC:'기타'};
@@ -572,6 +574,14 @@ function effDelta(cur, base, unit, higherGood){
   const cls=higherGood==null?'flat':((higherGood?pct>0:pct<0)?'good':'bad');
   return `<span class="delta ${cls}">${pct>0?'▲':'▼'} ${Math.abs(pct).toFixed(0)}%</span>`;
 }
+function airbridgeSubHTML(){
+  if(!AB) return '';
+  if(scope!=='ALL') return `<div class="sub" style="color:var(--muted)">에어브릿지 전환은 계정별 분리가 안 돼(ad_account_id 미제공) 전체 스코프에서만 표시</div>`;
+  const bd=AB.byDevice||{};
+  const pick=device==='PC'?['desktop']:device==='MO'?['mobile','tablet','other']:['desktop','mobile','tablet','other'];
+  let ord=0,rev=0; pick.forEach(k=>{const v=bd[k]; if(v){ord+=v[1]; rev+=v[2];}});
+  return `<div class="sub" style="color:var(--muted)">에어브릿지(SA채널 전체) ${md(AB.date)} 기준 주문 ${int(ord)}건 · 매출 ${krw(rev)} <span class="ref">·계정 분리 불가</span></div>`;
+}
 function renderEffTiles(te,be,pv){
   const cmp=`vs 직전 ${md(pv[0])}~${md(pv[1])}`;
   document.getElementById('effTiles').innerHTML=`
@@ -583,7 +593,8 @@ function renderEffTiles(te,be,pv){
       <div class="sub">직전 ${be.ctr?be.ctr.toFixed(2)+'%':'—'} · 높을수록 좋음</div></div>
     <div class="tile"><div class="lab"><span>전환효율</span><span style="font-weight:500;color:var(--muted)">참고 · ${cmp}</span></div>
       <div class="val sm">ROAS ${te.roas?te.roas.toFixed(0)+'%':'—'} ${effDelta(te.roas,be.roas,'rel',true)}</div>
-      <div class="sub">CVR ${te.cvr?te.cvr.toFixed(2)+'%':'—'} · CPA ${te.cpa?won(Math.round(te.cpa)):'—'} <span style="color:var(--muted)">· 전환 집계지연·과소계상</span></div></div>`;
+      <div class="sub">CVR ${te.cvr?te.cvr.toFixed(2)+'%':'—'} · CPA ${te.cpa?won(Math.round(te.cpa)):'—'} <span style="color:var(--muted)">· 네이버 전환태그는 집계지연·과소계상</span></div>
+      ${airbridgeSubHTML()}</div>`;
 }
 
 // ── 계정별 소진 (가로 스택) ─────────────────────────────────────────────
