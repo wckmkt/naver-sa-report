@@ -1201,21 +1201,30 @@ function topCompareHTML(){
     });});
   const lyTop=Object.values(lyAgg).sort((a,b)=>b.clk-a.clk).slice(0,10);
 
-  const rowsHtml=list=>list.map((k,i)=>`<tr>
+  // 에어브릿지 검색어(term) 단위 전환·매출 — 계정 구분 없이 키워드 텍스트로 매칭
+  const abIx={}; (AB&&AB.termCols||[]).forEach((c,i)=>abIx[c]=i);
+  const abMap={};
+  (AB&&AB.byTerm||[]).forEach(r=>{ abMap[r[abIx.term]]={ord:r[abIx.orders],rev:r[abIx.revenue]}; });
+  const abCell=k=>{ const a=abMap[k.kw]; return a?`<td>${int(a.ord)}</td><td>${krw(a.rev)}</td>`:'<td>—</td><td>—</td>'; };
+
+  const rowsHtml=(list,withAB)=>list.map((k,i)=>`<tr>
     <td class="l">${i+1}</td><td class="l" title="${k.kw}">${k.kw}</td>
     <td>${int(k.clk)}</td><td>${won(Math.round(k.clk?k.cost/k.clk:0))}</td><td>${(k.imp?k.clk/k.imp*100:0).toFixed(1)}%</td>
-  </tr>`).join('')||'<tr><td colspan="5" class="empty">데이터 없음</td></tr>';
-  const tbl=(title,hint,list)=>`
+    ${withAB?abCell(k):''}
+  </tr>`).join('')||`<tr><td colspan="${withAB?7:5}" class="empty">데이터 없음</td></tr>`;
+  const tbl=(title,hint,list,withAB)=>`
     <div class="panel tight"><div class="ph"><h2>${title} <span class="hint">${hint}</span></h2></div>
       <div class="tblwrap"><table><thead><tr>
         <th class="l">#</th><th class="l">키워드</th><th>클릭수</th><th>CPC</th><th>CTR</th>
-      </tr></thead><tbody>${rowsHtml(list)}</tbody></table></div></div>`;
+        ${withAB?'<th>전환<span class="ref">·에어브릿지</span></th><th>매출<span class="ref">·에어브릿지</span></th>':''}
+      </tr></thead><tbody>${rowsHtml(list,withAB)}</tbody></table></div></div>`;
 
   const PY=KW&&KW.ly;
+  const hasAB=AB&&AB.byTerm&&AB.byTerm.length;
   return `
   <div class="grid2">
-    ${tbl('⚡ 어제 TOP 10', `${KWD?md(KWD.day):''} · 클릭순 · 브랜드 키워드 제외`, curTop)}
-    ${tbl('📅 작년 동요일 TOP 10', PY?`${md(PY.date)} · 클릭순 · 브랜드 키워드 제외`:'', lyTop)}
+    ${tbl('⚡ 어제 TOP 10', `${KWD?md(KWD.day):''} · 클릭순 · 브랜드 키워드 제외${hasAB?' · 전환·매출은 에어브릿지 검색어 매칭(참고, 완전일치 아닐 수 있음)':''}`, curTop, hasAB)}
+    ${tbl('📅 작년 동요일 TOP 10', PY?`${md(PY.date)} · 클릭순 · 브랜드 키워드 제외 (에어브릿지는 2025-12부터라 전환 데이터 없음)`:'', lyTop, false)}
   </div>`;
 }
 function renderKw(){
