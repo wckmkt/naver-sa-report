@@ -466,10 +466,12 @@ function exportSpendCSV(){
 }
 function exportKwCSV(){
   const rows=[['계정','키워드','캠페인','그룹','유형','기기','입찰가','노출','클릭','비용','CTR(%)','CPC','전환수','전환매출','평균순위',
-               '직전노출','직전클릭','직전비용','직전CPC','비용증감','CPC증감']];
+               '직전노출','직전클릭','직전비용','직전CPC','비용증감','CPC증감',
+               '작년동기간노출','작년동기간클릭','작년동기간비용','작년比클릭증감']];
   kwRows().forEach(k=>rows.push([k.acct,k.kw,k.camp,k.grp,KL[k.kind]||k.kind,DL[k.device]||k.device,k.bid,
     k.imp,k.clk,k.cost,k.ctr.toFixed(2),Math.round(k.cpc),k.conv,k.convAmt,k.rnk,
-    k.pImp,k.pClk,k.pCost,Math.round(k.pcpc),k.cost-k.pCost,Math.round(k.cpc-k.pcpc)]));
+    k.pImp,k.pClk,k.pCost,Math.round(k.pcpc),k.cost-k.pCost,Math.round(k.cpc-k.pcpc),
+    k.yImp,k.yClk,k.yCost,k.dyClk]));
   downloadCSV(`naver_키워드_rawdata_${KW.period.since}_${KW.period.until}.csv`,rows);
 }
 function exportKwDailyCSV(){
@@ -1173,13 +1175,15 @@ function kwRows(){
     a.keywords.forEach(r=>{
       const k={acct:a.name,kw:r[ix.kw],camp:r[ix.camp],grp:r[ix.grp],kind:r[ix.kind],device:r[ix.device],
         bid:r[ix.bid],imp:r[ix.imp],clk:r[ix.clk],cost:r[ix.cost],conv:r[ix.conv],convAmt:r[ix.convAmt],
-        rnk:r[ix.rnk],pImp:r[ix.pImp],pClk:r[ix.pClk],pCost:r[ix.pCost],pConv:r[ix.pConv],pConvAmt:r[ix.pConvAmt]};
+        rnk:r[ix.rnk],pImp:r[ix.pImp],pClk:r[ix.pClk],pCost:r[ix.pCost],pConv:r[ix.pConv],pConvAmt:r[ix.pConvAmt],
+        yImp:r[ix.yImp]||0,yClk:r[ix.yClk]||0,yCost:r[ix.yCost]||0};
       if(kind!=='ALL'&&k.kind!==kind) return;
       if(device!=='ALL'&&k.device!==device) return;
       k.ctr=k.imp?k.clk/k.imp*100:0; k.cpc=k.clk?k.cost/k.clk:0;
       k.pctr=k.pImp?k.pClk/k.pImp*100:0; k.pcpc=k.pClk?k.pCost/k.pClk:0;
       k.cpa=k.conv?k.cost/k.conv:0; k.roas=k.cost?k.convAmt/k.cost*100:0;
       k.dCost=k.cost-k.pCost; k.dCpc=k.cpc-k.pcpc; k.dClk=k.clk-k.pClk;
+      k.dyClk=k.clk-k.yClk;
       out.push(k);
     });});
   _kwCache={key:ck,rows:out};
@@ -1217,10 +1221,11 @@ function renderKw(){
     {cost:0,clk:0,imp:0,conv:0,pCost:0});
   const good=rows.filter(k=>k.grade==='우수').sort((a,b)=>b.cost-a.cost);
   const bad=rows.filter(k=>k.grade==='비효율').sort((a,b)=>b.cost-a.cost);
-  const P=KW.period, PV=KW.prev;
+  const P=KW.period, PV=KW.prev, PY=KW.ly;
   body.innerHTML=digest+`
   <div class="alert info" style="margin-top:16px">
-    📌 키워드 스냅샷 <b>${P.since} ~ ${P.until}</b> (${P.days}일) · 비교 대상 <b>${PV.since} ~ ${PV.until}</b> ·
+    📌 키워드 스냅샷 <b>${P.since} ~ ${P.until}</b> (${P.days}일) · 직전기간 <b>${PV.since} ~ ${PV.until}</b>
+    ${PY?` · 작년 동요일(어제 기준) <b>${md(PY.date)}</b><span class="ref">·검색어 텍스트 매칭, 캠페인 재생성으로 완전일치 아닐 수 있음</span>`:''} ·
     수집 ${KW.generated} <span style="color:var(--muted)">— 상단 기간필터와 무관합니다. 기간을 바꾸려면
     <code>python naver_kw_collect.py --days N</code> 재실행.</span>
   </div>
@@ -1263,6 +1268,7 @@ function renderKw(){
       <th data-k="cpc">CPC</th><th data-k="dCpc">CPC 증감</th>
       <th data-k="rnk">평균순위</th><th data-k="bid">입찰가</th>
       <th data-k="conv">전환<span class="ref">·참고</span></th><th data-k="roas">ROAS<span class="ref">·참고</span></th>
+      <th data-k="yClk">작년 클릭<span class="ref">·동요일</span></th><th data-k="dyClk">작년比 증감</th><th data-k="yCost">작년 비용<span class="ref">·동요일</span></th>
       <th class="l" data-k="grade">등급</th>
     </tr></thead><tbody></tbody></table></div>
     <div class="foot">등급은 <b>현재 필터 안의 중앙값</b> 기준 상대평가입니다(클릭 3회 미만은 '소량'으로 제외).
@@ -1303,11 +1309,13 @@ function renderKwTable(){
     <td class="num">${won(Math.round(k.cpc))}</td>${dcell(Math.round(k.dCpc),v=>won(Math.abs(v)),false)}
     <td class="num ref">${k.rnk||'—'}</td><td class="num ref">${k.bid?won(k.bid):'—'}</td>
     <td class="num ref">${k.conv||'—'}</td><td class="num ref">${k.roas?k.roas.toFixed(0)+'%':'—'}</td>
+    <td class="num ref">${k.yClk?int(k.yClk):'—'}</td>${k.yClk?dcell(k.dyClk,v=>int(Math.abs(v)),true):'<td class="num ref">—</td>'}
+    <td class="num ref">${k.yCost?won(k.yCost):'—'}</td>
     <td class="l">${gtag(k.grade)}</td></tr>`).join('')
     +`<tr class="subtot"><td class="l" colspan="4">표시 ${shown.length} / 전체 ${rows.length}개 (전체는 CSV 다운로드)</td>
       <td class="num">${won(rows.reduce((s,k)=>s+k.cost,0))}</td><td></td>
       <td class="num">${int(rows.reduce((s,k)=>s+k.imp,0))}</td><td class="num">${int(rows.reduce((s,k)=>s+k.clk,0))}</td>
-      <td colspan="8"></td></tr>`;
+      <td colspan="11"></td></tr>`;
   document.querySelectorAll('#kwtbl th').forEach(th=>{th.onclick=()=>{const k=th.dataset.k;
     if(k===kwSort)kwDir*=-1;else{kwSort=k;kwDir=new Set(['kw','camp','kind','device','grade']).has(k)?1:-1;}
     renderKwTable();};});
