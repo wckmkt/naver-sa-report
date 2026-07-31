@@ -465,17 +465,17 @@ function exportSpendCSV(){
   downloadCSV(`naver_소진_rawdata_${pFrom}_${pTo}.csv`,rows);
 }
 function exportKwCSV(){
-  const rows=[['계정','키워드','캠페인','그룹','유형','기기','입찰가','노출','클릭','비용','CTR(%)','CPC','전환수','전환매출','평균순위',
+  const rows=[['계정','키워드','기기','입찰가','노출','클릭','비용','CTR(%)','CPC','전환수','전환매출','평균순위',
                '직전노출','직전클릭','직전비용','직전CPC','비용증감','CPC증감']];
-  kwRows().forEach(k=>rows.push([k.acct,k.kw,k.camp,k.grp,KL[k.kind]||k.kind,DL[k.device]||k.device,k.bid,
+  kwRows().forEach(k=>rows.push([k.acct,k.kw,DL[k.device]||k.device,k.bid,
     k.imp,k.clk,k.cost,k.ctr.toFixed(2),Math.round(k.cpc),k.conv,k.convAmt,k.rnk,
     k.pImp,k.pClk,k.pCost,Math.round(k.pcpc),k.cost-k.pCost,Math.round(k.cpc-k.pcpc)]));
   downloadCSV(`naver_키워드_rawdata_${KW.period.since}_${KW.period.until}.csv`,rows);
 }
 function exportKwDailyCSV(){
-  const rows=[['계정','키워드','캠페인','그룹','유형','기기','입찰가','노출','클릭','비용','CTR(%)','CPC','전환수','전환매출','평균순위',
+  const rows=[['계정','키워드','기기','입찰가','노출','클릭','비용','CTR(%)','CPC','전환수','전환매출','평균순위',
                '지난주동요일노출','지난주동요일클릭','지난주동요일비용','클릭증감']];
-  kwDailyRows().forEach(k=>rows.push([k.acct,k.kw,k.camp,k.grp,KL[k.kind]||k.kind,DL[k.device]||k.device,k.bid,
+  kwDailyRows().forEach(k=>rows.push([k.acct,k.kw,DL[k.device]||k.device,k.bid,
     k.imp,k.clk,k.cost,k.ctr.toFixed(2),Math.round(k.cpc),k.conv,k.convAmt,k.rnk,
     k.wImp,k.wClk,k.wCost,k.clk-k.wClk]));
   downloadCSV(`naver_키워드_전일자_rawdata_${KWD.day}.csv`,rows);
@@ -1073,7 +1073,7 @@ function kwDailyRows(){
       const k={acct:a.name,kw:r[ix.kw],camp:r[ix.camp],grp:r[ix.grp],kind:r[ix.kind],device:r[ix.device],
         bid:r[ix.bid],imp:r[ix.imp],clk:r[ix.clk],cost:r[ix.cost],conv:r[ix.conv],convAmt:r[ix.convAmt],rnk:r[ix.rnk],
         wImp:r[ix.wImp]||0,wClk:r[ix.wClk]||0,wCost:r[ix.wCost]||0,wConv:r[ix.wConv]||0,wConvAmt:r[ix.wConvAmt]||0};
-      if(kind!=='ALL'&&k.kind!==kind) return;
+      if(k.kind!=='SA') return;   // 키워드탭은 파워링크만(쇼핑검색은 등록 키워드가 사실상 없어 노이즈)
       if(device!=='ALL'&&k.device!==device) return;
       k.ctr=k.imp?k.clk/k.imp*100:0; k.cpc=k.clk?k.cost/k.clk:0;
       k.cpa=k.conv?k.cost/k.conv:0; k.roas=k.cost?k.convAmt/k.cost*100:0;
@@ -1086,8 +1086,7 @@ function kwdCard(k,color,line2){
   return `<div class="kwcard" style="border-left:3px solid ${cvar(color)}">
     <div class="k" title="${k.kw}">${k.kw} <span style="font-weight:500;color:var(--muted)">${k.acct}</span></div>
     <div class="m">${krw(k.cost)} · ${int(k.clk)}클릭 · CPC ${won(Math.round(k.cpc))}</div>
-    <div class="m" style="color:var(--muted)">${line2}</div>
-    <div class="m" style="color:var(--muted)">${k.camp}</div></div>`;
+    <div class="m" style="color:var(--muted)">${line2}</div></div>`;
 }
 function kwDailyHTML(){
   if(!KWD) return `<div class="alert info" style="margin-top:16px">
@@ -1141,7 +1140,7 @@ function kwRows(){
       const k={acct:a.name,kw:r[ix.kw],camp:r[ix.camp],grp:r[ix.grp],kind:r[ix.kind],device:r[ix.device],
         bid:r[ix.bid],imp:r[ix.imp],clk:r[ix.clk],cost:r[ix.cost],conv:r[ix.conv],convAmt:r[ix.convAmt],
         rnk:r[ix.rnk],pImp:r[ix.pImp],pClk:r[ix.pClk],pCost:r[ix.pCost],pConv:r[ix.pConv],pConvAmt:r[ix.pConvAmt]};
-      if(kind!=='ALL'&&k.kind!==kind) return;
+      if(k.kind!=='SA') return;   // 키워드탭은 파워링크만(쇼핑검색은 등록 키워드가 사실상 없어 노이즈)
       if(device!=='ALL'&&k.device!==device) return;
       k.ctr=k.imp?k.clk/k.imp*100:0; k.cpc=k.clk?k.cost/k.clk:0;
       k.pctr=k.pImp?k.pClk/k.pImp*100:0; k.pcpc=k.pClk?k.pCost/k.pClk:0;
@@ -1257,13 +1256,12 @@ function renderKw(){
   <div class="panel">
     <div class="ph"><h2>키워드 상세 <span class="hint">헤더 클릭 = 정렬 · 상위 300개 표시(전체는 CSV)</span></h2>
       <div class="tblctl">
-        <input id="kwSearch" class="search" type="text" placeholder="🔍 키워드/캠페인 검색" value="${kwQuery.replace(/"/g,'&quot;')}" autocomplete="off">
+        <input id="kwSearch" class="search" type="text" placeholder="🔍 키워드 검색" value="${kwQuery.replace(/"/g,'&quot;')}" autocomplete="off">
         <div class="seg" id="kwGradeSeg"></div>
       </div>
     </div>
     <div class="tblwrap"><table id="kwtbl"><thead><tr>
-      <th class="l" data-k="kw">키워드</th><th class="l" data-k="camp">캠페인</th>
-      <th class="l" data-k="kind">유형</th><th class="l" data-k="device">기기</th>
+      <th class="l" data-k="kw">키워드</th><th class="l" data-k="device">기기</th>
       <th data-k="cost">비용</th><th data-k="dCost">비용 증감</th>
       <th data-k="imp">노출</th><th data-k="clk">클릭</th><th data-k="ctr">CTR</th>
       <th data-k="cpc">CPC</th><th data-k="dCpc">CPC 증감</th>
@@ -1285,15 +1283,14 @@ function kwCard(k,cls){
   return `<div class="kwcard" style="border-left:3px solid ${cvar(c)}">
     <div class="k" title="${k.kw}">${k.kw}</div>
     <div class="m">${krw(k.cost)} · ${int(k.clk)}클릭 · CPC ${won(Math.round(k.cpc))}</div>
-    <div class="m" style="color:var(--muted)">CTR ${k.ctr.toFixed(2)}%${k.conv?` · 전환 ${int(k.conv)}`:''}${k.rnk?` · 순위 ${k.rnk}`:''}</div>
-    <div class="m" style="color:var(--muted)">${k.camp}</div></div>`;
+    <div class="m" style="color:var(--muted)">CTR ${k.ctr.toFixed(2)}%${k.conv?` · 전환 ${int(k.conv)}`:''}${k.rnk?` · 순위 ${k.rnk}`:''}</div></div>`;
 }
 function renderKwTable(){
   let rows=kwRows(); gradeKw(rows);
   if(kwGrade!=='all') rows=rows.filter(k=>k.grade===kwGrade);
   if(kwQuery.trim()){const q=kwQuery.trim().toLowerCase();
-    rows=rows.filter(k=>k.kw.toLowerCase().includes(q)||k.camp.toLowerCase().includes(q)||k.grp.toLowerCase().includes(q));}
-  const strK=new Set(['kw','camp','kind','device','grade']);
+    rows=rows.filter(k=>k.kw.toLowerCase().includes(q));}
+  const strK=new Set(['kw','device','grade']);
   rows.sort((a,b)=>strK.has(kwSort)?String(a[kwSort]).localeCompare(String(b[kwSort]),'ko')*kwDir
     :((a[kwSort]||0)-(b[kwSort]||0))*kwDir);
   const shown=rows.slice(0,300);
@@ -1302,20 +1299,19 @@ function renderKwTable(){
   const dcell=(v,fmt,good)=>{const col=v>0?(good?'var(--pc)':'var(--critical)'):v<0?(good?'var(--critical)':'var(--pc)'):'var(--muted)';
     return `<td class="num" style="color:${col}">${v>0?'+':''}${fmt(v)}</td>`;};
   document.querySelector('#kwtbl tbody').innerHTML=shown.map(k=>`<tr>
-    <td class="l keep" title="${k.kw}">${k.kw}</td><td class="l ref" title="${k.camp} / ${k.grp}">${k.camp}</td>
-    <td class="l">${kindTag(k.kind)}</td><td class="l">${devTag(k.device)}</td>
+    <td class="l keep" title="${k.kw}">${k.kw}</td><td class="l">${devTag(k.device)}</td>
     <td class="num">${won(k.cost)}</td>${dcell(k.dCost,v=>krw(Math.abs(v)),true)}
     <td class="num">${int(k.imp)}</td><td class="num">${int(k.clk)}</td><td class="num">${k.ctr.toFixed(2)}%</td>
     <td class="num">${won(Math.round(k.cpc))}</td>${dcell(Math.round(k.dCpc),v=>won(Math.abs(v)),false)}
     <td class="num ref">${k.rnk||'—'}</td><td class="num ref">${k.bid?won(k.bid):'—'}</td>
     <td class="num ref">${k.conv||'—'}</td><td class="num ref">${k.roas?k.roas.toFixed(0)+'%':'—'}</td>
     <td class="l">${gtag(k.grade)}</td></tr>`).join('')
-    +`<tr class="subtot"><td class="l" colspan="4">표시 ${shown.length} / 전체 ${rows.length}개 (전체는 CSV 다운로드)</td>
+    +`<tr class="subtot"><td class="l" colspan="2">표시 ${shown.length} / 전체 ${rows.length}개 (전체는 CSV 다운로드)</td>
       <td class="num">${won(rows.reduce((s,k)=>s+k.cost,0))}</td><td></td>
       <td class="num">${int(rows.reduce((s,k)=>s+k.imp,0))}</td><td class="num">${int(rows.reduce((s,k)=>s+k.clk,0))}</td>
       <td colspan="8"></td></tr>`;
   document.querySelectorAll('#kwtbl th').forEach(th=>{th.onclick=()=>{const k=th.dataset.k;
-    if(k===kwSort)kwDir*=-1;else{kwSort=k;kwDir=new Set(['kw','camp','kind','device','grade']).has(k)?1:-1;}
+    if(k===kwSort)kwDir*=-1;else{kwSort=k;kwDir=new Set(['kw','device','grade']).has(k)?1:-1;}
     renderKwTable();};});
 }
 let kwChart;
