@@ -467,11 +467,13 @@ function exportSpendCSV(){
   downloadCSV(`naver_소진_rawdata_${pFrom}_${pTo}.csv`,rows);
 }
 function exportKwCSV(){
-  const rows=[['계정','키워드','기기','입찰가','노출','클릭','비용','CTR(%)','CPC','전환수','전환매출','평균순위',
-               '직전노출','직전클릭','직전비용','직전CPC','비용증감','CPC증감']];
+  const rows=[['계정','키워드','기기','입찰가','노출','클릭','비용','CTR(%)','CPC','평균순위',
+               '직전노출','직전클릭','직전비용','직전CPC','비용증감','CPC증감',
+               '전환(에어브릿지·어제)','매출(에어브릿지·어제)','전환수(네이버·참고)','전환매출(네이버·참고)']];
   kwRows().forEach(k=>rows.push([k.acct,k.kw,DL[k.device]||k.device,k.bid,
-    k.imp,k.clk,k.cost,k.ctr.toFixed(2),Math.round(k.cpc),k.conv,k.convAmt,k.rnk,
-    k.pImp,k.pClk,k.pCost,Math.round(k.pcpc),k.cost-k.pCost,Math.round(k.cpc-k.pcpc)]));
+    k.imp,k.clk,k.cost,k.ctr.toFixed(2),Math.round(k.cpc),k.rnk,
+    k.pImp,k.pClk,k.pCost,Math.round(k.pcpc),k.cost-k.pCost,Math.round(k.cpc-k.pcpc),
+    k.abOrd,k.abRev,k.conv,k.convAmt]));
   downloadCSV(`naver_키워드_rawdata_${KW.period.since}_${KW.period.until}.csv`,rows);
 }
 function exportKwDailyCSV(){
@@ -1099,6 +1101,20 @@ function kwdCard(k,color,line2){
     <div class="m">${krw(k.cost)} · ${int(k.clk)}클릭 · CPC ${won(Math.round(k.cpc))}</div>
     <div class="m" style="color:var(--muted)">${line2}</div></div>`;
 }
+function airbridgeDailyTileHTML(tot){
+  if(scope==='ALL'&&AB&&AB.byDevice){
+    const pick=device==='PC'?['desktop']:device==='MO'?['mobile','tablet','other']:['desktop','mobile','tablet','other'];
+    let ord=0,rev=0; pick.forEach(k=>{const v=AB.byDevice[k]; if(v){ord+=v[1]; rev+=v[2];}});
+    const roas=tot.cost?Math.round(rev/tot.cost*100):0;
+    return `<div class="tile"><div class="lab">전환 <span style="font-weight:500;color:var(--muted)">·에어브릿지</span></div>
+      <div class="val">${int(ord)}</div>
+      <div class="sub">매출 ${krw(rev)} · ROAS ${roas}% <span class="ref">·SA채널 전체(계정분리 불가)</span></div></div>`;
+  }
+  return `<div class="tile"><div class="lab">전환 <span style="font-weight:500;color:var(--muted)">·참고</span></div>
+    <div class="val">${int(tot.conv)}</div>
+    <div class="sub">전환매출 ${krw(tot.convAmt)} · ROAS ${tot.cost?Math.round(tot.convAmt/tot.cost*100):0}%
+      ${AB?'<span class="ref">·에어브릿지는 계정선택 시 미지원</span>':''}</div></div>`;
+}
 function kwDailyHTML(){
   if(!KWD) return `<div class="alert info" style="margin-top:16px">
     ℹ️ <b>어제 키워드 이슈</b>를 보려면 <code>python naver_kw_daily.py</code> 를 실행하세요
@@ -1121,9 +1137,7 @@ function kwDailyHTML(){
       <div class="sub">소진 키워드 ${int(active.length)}개</div></div>
     <div class="tile"><div class="lab">클릭 / CPC</div><div class="val">${int(tot.clk)} <small>클릭</small></div>
       <div class="sub">평균 CPC ${won(tot.clk?Math.round(tot.cost/tot.clk):0)} · CTR ${(tot.imp?tot.clk/tot.imp*100:0).toFixed(2)}%</div></div>
-    <div class="tile"><div class="lab">전환 <span style="font-weight:500;color:var(--muted)">·참고</span></div>
-      <div class="val">${int(tot.conv)}</div>
-      <div class="sub">전환매출 ${krw(tot.convAmt)} · ROAS ${tot.cost?Math.round(tot.convAmt/tot.cost*100):0}%</div></div>
+    ${airbridgeDailyTileHTML(tot)}
     <div class="tile"><div class="lab">노출 키워드</div><div class="val">${int(rows.length)}</div>
       <div class="sub">현재 필터 기준</div></div>
   </div>
@@ -1157,6 +1171,7 @@ function kwRows(){
       k.pctr=k.pImp?k.pClk/k.pImp*100:0; k.pcpc=k.pClk?k.pCost/k.pClk:0;
       k.cpa=k.conv?k.cost/k.conv:0; k.roas=k.cost?k.convAmt/k.cost*100:0;
       k.dCost=k.cost-k.pCost; k.dCpc=k.cpc-k.pcpc; k.dClk=k.clk-k.pClk;
+      const ab=airbridgeTermMap()[k.kw]; k.abOrd=ab?ab.ord:0; k.abRev=ab?ab.rev:0;
       out.push(k);
     });});
   _kwCache={key:ck,rows:out};
@@ -1201,31 +1216,32 @@ function topCompareHTML(){
     });});
   const lyTop=Object.values(lyAgg).sort((a,b)=>b.clk-a.clk).slice(0,10);
 
-  // 에어브릿지 검색어(term) 단위 전환·매출 — 계정 구분 없이 키워드 텍스트로 매칭
-  const abIx={}; (AB&&AB.termCols||[]).forEach((c,i)=>abIx[c]=i);
-  const abMap={};
-  (AB&&AB.byTerm||[]).forEach(r=>{ abMap[r[abIx.term]]={ord:r[abIx.orders],rev:r[abIx.revenue]}; });
-  const abCell=k=>{ const a=abMap[k.kw]; return a?`<td>${int(a.ord)}</td><td>${krw(a.rev)}</td>`:'<td>—</td><td>—</td>'; };
-
-  const rowsHtml=(list,withAB)=>list.map((k,i)=>`<tr>
+  const rowsHtml=list=>list.map((k,i)=>`<tr>
     <td class="l">${i+1}</td><td class="l" title="${k.kw}">${k.kw}</td>
     <td>${int(k.clk)}</td><td>${won(Math.round(k.clk?k.cost/k.clk:0))}</td><td>${(k.imp?k.clk/k.imp*100:0).toFixed(1)}%</td>
-    ${withAB?abCell(k):''}
-  </tr>`).join('')||`<tr><td colspan="${withAB?7:5}" class="empty">데이터 없음</td></tr>`;
-  const tbl=(title,hint,list,withAB)=>`
+  </tr>`).join('')||'<tr><td colspan="5" class="empty">데이터 없음</td></tr>';
+  const tbl=(title,hint,list)=>`
     <div class="panel tight"><div class="ph"><h2>${title} <span class="hint">${hint}</span></h2></div>
       <div class="tblwrap"><table><thead><tr>
         <th class="l">#</th><th class="l">키워드</th><th>클릭수</th><th>CPC</th><th>CTR</th>
-        ${withAB?'<th>전환<span class="ref">·에어브릿지</span></th><th>매출<span class="ref">·에어브릿지</span></th>':''}
-      </tr></thead><tbody>${rowsHtml(list,withAB)}</tbody></table></div></div>`;
+      </tr></thead><tbody>${rowsHtml(list)}</tbody></table></div></div>`;
 
   const PY=KW&&KW.ly;
-  const hasAB=AB&&AB.byTerm&&AB.byTerm.length;
   return `
   <div class="grid2">
-    ${tbl('⚡ 어제 TOP 10', `${KWD?md(KWD.day):''} · 클릭순 · 브랜드 키워드 제외${hasAB?' · 전환·매출은 에어브릿지 검색어 매칭(참고, 완전일치 아닐 수 있음)':''}`, curTop, hasAB)}
-    ${tbl('📅 작년 동요일 TOP 10', PY?`${md(PY.date)} · 클릭순 · 브랜드 키워드 제외 (에어브릿지는 2025-12부터라 전환 데이터 없음)`:'', lyTop, false)}
+    ${tbl('⚡ 어제 TOP 10', `${KWD?md(KWD.day):''} · 클릭순 · 브랜드 키워드 제외`, curTop)}
+    ${tbl('📅 작년 동요일 TOP 10', PY?`${md(PY.date)} · 클릭순 · 브랜드 키워드 제외`:'', lyTop)}
   </div>`;
+}
+// 에어브릿지 검색어(term) → {ord,rev} 매핑 — 계정 구분 없이 키워드 텍스트로 매칭(어제 1일)
+let _abMapCache=null;
+function airbridgeTermMap(){
+  if(_abMapCache) return _abMapCache;
+  const ix={}; (AB&&AB.termCols||[]).forEach((c,i)=>ix[c]=i);
+  const m={};
+  (AB&&AB.byTerm||[]).forEach(r=>{ m[r[ix.term]]={ord:r[ix.orders],rev:r[ix.revenue]}; });
+  _abMapCache=m;
+  return m;
 }
 function renderKw(){
   const body=document.getElementById('kwBody');
@@ -1286,11 +1302,12 @@ function renderKw(){
       <th data-k="imp">노출</th><th data-k="clk">클릭</th><th data-k="ctr">CTR</th>
       <th data-k="cpc">CPC</th><th data-k="dCpc">CPC 증감</th>
       <th data-k="rnk">평균순위</th><th data-k="bid">입찰가</th>
-      <th data-k="conv">전환<span class="ref">·참고</span></th><th data-k="roas">ROAS<span class="ref">·참고</span></th>
+      <th data-k="abOrd">전환${AB?'<span class="ref">·에어브릿지 어제</span>':'<span class="ref">·참고</span>'}</th>
+      <th data-k="abRev">매출${AB?'<span class="ref">·에어브릿지 어제</span>':'<span class="ref">·참고</span>'}</th>
       <th class="l" data-k="grade">등급</th>
     </tr></thead><tbody></tbody></table></div>
     <div class="foot">등급은 <b>현재 필터 안의 중앙값</b> 기준 상대평가입니다(클릭 3회 미만은 '소량'으로 제외).
-      전환·ROAS는 네이버 전환태그 과소계상으로 참고용 · 평균순위는 파워링크만 제공됩니다.</div>
+      ${AB?'전환·매출은 에어브릿지 검색어 매칭 기준 <b>어제 하루</b>치입니다(표는 기간 합계라 스코프가 다름) · 계정 선택 시에도 전체 채널 기준':'전환·ROAS는 네이버 전환태그 과소계상으로 참고용'} · 평균순위는 파워링크만 제공됩니다.</div>
   </div>`;
   seg('kwGradeSeg',[['all','전체'],['우수','우수'],['보통','보통'],['비효율','비효율'],['소량','소량']],kwGrade,
     v=>{kwGrade=v;renderKwTable();},{});
@@ -1324,7 +1341,7 @@ function renderKwTable(){
     <td class="num">${int(k.imp)}</td><td class="num">${int(k.clk)}</td><td class="num">${k.ctr.toFixed(2)}%</td>
     <td class="num">${won(Math.round(k.cpc))}</td>${dcell(Math.round(k.dCpc),v=>won(Math.abs(v)),false)}
     <td class="num ref">${k.rnk||'—'}</td><td class="num ref">${k.bid?won(k.bid):'—'}</td>
-    <td class="num ref">${k.conv||'—'}</td><td class="num ref">${k.roas?k.roas.toFixed(0)+'%':'—'}</td>
+    <td class="num ref">${k.abOrd||'—'}</td><td class="num ref">${k.abRev?krw(k.abRev):'—'}</td>
     <td class="l">${gtag(k.grade)}</td></tr>`).join('')
     +`<tr class="subtot"><td class="l" colspan="2">표시 ${shown.length} / 전체 ${rows.length}개 (전체는 CSV 다운로드)</td>
       <td class="num">${won(rows.reduce((s,k)=>s+k.cost,0))}</td><td></td>
