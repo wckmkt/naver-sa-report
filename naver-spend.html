@@ -472,6 +472,14 @@ function exportKwCSV(){
     k.pImp,k.pClk,k.pCost,Math.round(k.pcpc),k.cost-k.pCost,Math.round(k.cpc-k.pcpc)]));
   downloadCSV(`naver_키워드_rawdata_${KW.period.since}_${KW.period.until}.csv`,rows);
 }
+function exportKwDailyCSV(){
+  const rows=[['계정','키워드','캠페인','그룹','유형','기기','입찰가','노출','클릭','비용','CTR(%)','CPC','전환수','전환매출','평균순위',
+               '지난주동요일노출','지난주동요일클릭','지난주동요일비용','클릭증감']];
+  kwDailyRows().forEach(k=>rows.push([k.acct,k.kw,k.camp,k.grp,KL[k.kind]||k.kind,DL[k.device]||k.device,k.bid,
+    k.imp,k.clk,k.cost,k.ctr.toFixed(2),Math.round(k.cpc),k.conv,k.convAmt,k.rnk,
+    k.wImp,k.wClk,k.wCost,k.clk-k.wClk]));
+  downloadCSV(`naver_키워드_전일자_rawdata_${KWD.day}.csv`,rows);
+}
 
 // ── 헤더 / 컨트롤 ───────────────────────────────────────────────────────
 function renderHeader(){
@@ -1113,9 +1121,10 @@ function kwDailyHTML(){
     <td>${int(k.clk)}</td><td>${won(Math.round(k.cpc))}</td>
     <td>${k.conv?int(k.conv):'—'}</td><td>${k.rnk?k.rnk:'—'}</td></tr>`).join('');
   return `
-  <div class="alert info" style="margin-top:16px">
-    ⚡ <b>어제(${md(KWD.day)}) 키워드 이슈</b>
-    · 수집 ${KWD.generated} <span style="color:var(--muted)">— 갱신: <code>python naver_kw_daily.py</code></span>
+  <div class="alert info" style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+    <div>⚡ <b>어제(${md(KWD.day)}) 키워드 이슈</b>
+    · 수집 ${KWD.generated} <span style="color:var(--muted)">— 갱신: <code>python naver_kw_daily.py</code></span></div>
+    <button class="ghost" onclick="exportKwDailyCSV()">⬇ 어제자 CSV</button>
   </div>
   <div class="tiles">
     <div class="tile"><div class="lab">어제 키워드 비용</div><div class="val">${krw(tot.cost)}</div>
