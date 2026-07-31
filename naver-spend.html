@@ -1144,6 +1144,7 @@ function kwDailyHTML(){
       <th>어제 클릭</th><th>지난주 동요일</th><th>증감</th><th>어제 비용</th><th>전환</th>
     </tr></thead><tbody>${clkRows||'<tr><td colspan="9" class="empty">데이터 없음</td></tr>'}</tbody></table></div>
   </div>
+  ${topCompareHTML()}
   <div class="panel tight">
     <div class="ph"><h2>💸 어제 소진 TOP 10 <span class="hint">현재 필터 기준 · 점유율 = 어제 키워드 비용 대비</span></h2></div>
     <div class="tblwrap"><table><thead><tr>
@@ -1205,18 +1206,18 @@ function gradeKw(rows){
 // 자사명/브랜드 키워드 자동 제외(패턴 매칭) — W컨셉/더블유컨셉/wconcept 등 표기변형
 const BRAND_KW_RE=/w\s*컨\s*셉|더\s*블\s*유\s*컨\s*셉|wconcept/i;
 function topCompareHTML(){
-  if(!KW) return '';
+  if(!KWD && !KW) return '';
   const curAgg={};
-  kwRows().forEach(k=>{
+  kwDailyRows().forEach(k=>{
     if(BRAND_KW_RE.test(k.kw)) return;
     const a=curAgg[k.kw]||(curAgg[k.kw]={kw:k.kw,imp:0,clk:0,cost:0});
     a.imp+=k.imp; a.clk+=k.clk; a.cost+=k.cost;
   });
   const curTop=Object.values(curAgg).sort((a,b)=>b.clk-a.clk).slice(0,10);
 
-  const LC=KW.lyCols||['kw','imp','clk','cost'], lix={}; LC.forEach((c,i)=>lix[c]=i);
+  const LC=(KW&&KW.lyCols)||['kw','imp','clk','cost'], lix={}; LC.forEach((c,i)=>lix[c]=i);
   const lyAgg={};
-  (KW.accounts||[]).forEach(a=>{ if(scope!=='ALL'&&a.name!==scope) return;
+  ((KW&&KW.accounts)||[]).forEach(a=>{ if(scope!=='ALL'&&a.name!==scope) return;
     (a.lyTop||[]).forEach(r=>{
       const kw=r[lix.kw]; if(BRAND_KW_RE.test(kw)) return;
       const o=lyAgg[kw]||(lyAgg[kw]={kw,imp:0,clk:0,cost:0});
@@ -1234,11 +1235,11 @@ function topCompareHTML(){
         <th class="l">#</th><th class="l">키워드</th><th>클릭수</th><th>CPC</th><th>CTR</th>
       </tr></thead><tbody>${rowsHtml(list)}</tbody></table></div></div>`;
 
-  const PY=KW.ly;
+  const PY=KW&&KW.ly;
   return `
   <div class="grid2">
-    ${tbl('🔥 이번 기간 TOP 10', `${KW.period.since}~${KW.period.until} · 클릭순 · 브랜드 키워드 제외`, curTop)}
-    ${tbl('📅 작년 동요일 TOP 10', PY?`${md(PY.date)} · 클릭순 · 브랜드 키워드 제외 · 이번 기간과 별개 독립 순위`:'', lyTop)}
+    ${tbl('⚡ 어제 TOP 10', `${KWD?md(KWD.day):''} · 클릭순 · 브랜드 키워드 제외`, curTop)}
+    ${tbl('📅 작년 동요일 TOP 10', PY?`${md(PY.date)} · 클릭순 · 브랜드 키워드 제외 · 어제와 별개 독립 순위`:'', lyTop)}
   </div>`;
 }
 function renderKw(){
@@ -1263,7 +1264,6 @@ function renderKw(){
     수집 ${KW.generated} <span style="color:var(--muted)">— 상단 기간필터와 무관합니다. 기간을 바꾸려면
     <code>python naver_kw_collect.py --days N</code> 재실행.</span>
   </div>
-  ${topCompareHTML()}
   <div class="tiles">
     <div class="tile"><div class="lab">키워드 (노출 발생)</div><div class="val">${int(rows.length)}</div>
       <div class="sub">우수 ${int(good.length)} · 비효율 ${int(bad.length)}</div></div>
