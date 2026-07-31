@@ -1098,28 +1098,8 @@ function kwDailyHTML(){
     {cost:0,clk:0,imp:0,conv:0,convAmt:0});
   const MIN=10000;
   const active=rows.filter(k=>k.cost>0);
-  const spendTop=[...rows].sort((a,b)=>b.cost-a.cost).slice(0,10);
-  const clkTop=[...rows].sort((a,b)=>b.clk-a.clk).slice(0,10);
   const convTop=rows.filter(k=>k.conv>0).sort((a,b)=>b.convAmt-a.convAmt||b.conv-a.conv).slice(0,8);
   const waste=rows.filter(k=>k.cost>=MIN*3&&!k.conv).sort((a,b)=>b.cost-a.cost).slice(0,8);
-  const shr=v=>tot.cost?(v/tot.cost*100).toFixed(1)+'%':'—';
-  const clkDelta=k=>{
-    if(!k.wClk) return '<span class="delta bad">신규</span>';
-    const d=k.clk-k.wClk;
-    if(d===0) return '<span class="delta flat">≈ 동일</span>';
-    return `<span class="delta ${d>0?'good':'bad'}">${d>0?'▲':'▼'} ${Math.abs(d)}</span>`;
-  };
-  const clkRows=clkTop.map((k,i)=>`<tr>
-    <td class="l">${i+1}</td><td class="l" title="${k.kw}">${k.kw}</td>
-    <td class="l">${k.acct}</td><td class="l">${kindTag(k.kind)}${devTag(k.device)}</td>
-    <td>${int(k.clk)}</td><td>${k.wClk?int(k.wClk):'—'}</td><td>${clkDelta(k)}</td>
-    <td>${won(k.cost)}</td><td>${k.conv?int(k.conv):'—'}</td></tr>`).join('');
-  const spendRows=spendTop.map((k,i)=>`<tr>
-    <td class="l">${i+1}</td><td class="l" title="${k.kw}">${k.kw}</td>
-    <td class="l">${k.acct}</td><td class="l">${kindTag(k.kind)}${devTag(k.device)}</td>
-    <td>${won(k.cost)}</td><td>${shr(k.cost)}</td>
-    <td>${int(k.clk)}</td><td>${won(Math.round(k.cpc))}</td>
-    <td>${k.conv?int(k.conv):'—'}</td><td>${k.rnk?k.rnk:'—'}</td></tr>`).join('');
   return `
   <div class="alert info" style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
     <div>⚡ <b>어제(${md(KWD.day)}) 키워드 이슈</b>
@@ -1137,21 +1117,7 @@ function kwDailyHTML(){
     <div class="tile"><div class="lab">노출 키워드</div><div class="val">${int(rows.length)}</div>
       <div class="sub">현재 필터 기준</div></div>
   </div>
-  <div class="panel tight">
-    <div class="ph"><h2>🖱️ 어제 클릭 TOP 10 <span class="hint">지난주 동요일(${md(KWD.wday)}) 대비 · 계정 재생성(2026-04~05)으로 전년 비교는 API상 불가 — 요일 편향 없는 대체 지표</span></h2></div>
-    <div class="tblwrap"><table><thead><tr>
-      <th class="l">#</th><th class="l">키워드</th><th class="l">계정</th><th class="l">유형·기기</th>
-      <th>어제 클릭</th><th>지난주 동요일</th><th>증감</th><th>어제 비용</th><th>전환</th>
-    </tr></thead><tbody>${clkRows||'<tr><td colspan="9" class="empty">데이터 없음</td></tr>'}</tbody></table></div>
-  </div>
   ${topCompareHTML()}
-  <div class="panel tight">
-    <div class="ph"><h2>💸 어제 소진 TOP 10 <span class="hint">현재 필터 기준 · 점유율 = 어제 키워드 비용 대비</span></h2></div>
-    <div class="tblwrap"><table><thead><tr>
-      <th class="l">#</th><th class="l">키워드</th><th class="l">계정</th><th class="l">유형·기기</th>
-      <th>비용</th><th>점유율</th><th>클릭</th><th>CPC</th><th>전환</th><th>순위</th>
-    </tr></thead><tbody>${spendRows||'<tr><td colspan="10" class="empty">데이터 없음</td></tr>'}</tbody></table></div>
-  </div>
   <div class="grid2">
     <div class="panel tight"><div class="ph"><h2>🎯 전환 우수 <span class="hint">어제 전환 발생 · 전환매출순 · 네이버 전환태그(과소계상) 참고용</span></h2></div>
       <div class="kwcards">${convTop.map(k=>kwdCard(k,'--pc',
