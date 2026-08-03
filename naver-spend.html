@@ -356,6 +356,7 @@ code{background:color-mix(in srgb,var(--ink) 7%,transparent);padding:1px 6px;bor
   var files = ['naver_spend_data.js',
     ['naver_kw_data.js', 'window.__kwMissing=1'],
     ['naver_kw_daily_data.js', 'window.__kwdMissing=1'],
+    ['naver_kw_mtd_data.js', 'window.__kwmMissing=1'],
     ['airbridge_conv_data.js', 'window.__abMissing=1']];
   files.forEach(function(f){
     var src = Array.isArray(f) ? f[0] : f, onerr = Array.isArray(f) ? f[1] : '';
@@ -368,6 +369,7 @@ code{background:color-mix(in srgb,var(--ink) 7%,transparent);padding:1px 6px;bor
 const D = window.NAVER_SPEND;
 const KW = window.NAVER_KW || null;
 const KWD = window.NAVER_KW_DAILY || null;
+const KWM = window.NAVER_KW_MTD || null;
 const AB = window.AIRBRIDGE_CONV || null;
 if(!D){ document.body.innerHTML='<div class="wrap"><h1>데이터 없음</h1><p>naver_spend_collect.py를 먼저 실행하세요.</p></div>'; }
 
@@ -1227,11 +1229,28 @@ function topCompareHTML(){
       </tr></thead><tbody>${rowsHtml(list)}</tbody></table></div></div>`;
 
   const PY=KW&&KW.ly;
+
+  const mtdAgg=(field)=>{
+    const agg={};
+    ((KWM&&KWM.accounts)||[]).forEach(a=>{ if(scope!=='ALL'&&a.name!==scope) return;
+      (a[field]||[]).forEach(r=>{
+        const kw=r[0]; if(BRAND_KW_RE.test(kw)) return;
+        const o=agg[kw]||(agg[kw]={kw,imp:0,clk:0,cost:0});
+        o.imp+=r[1]; o.clk+=r[2]; o.cost+=r[3];
+      });});
+    return Object.values(agg).sort((a,b)=>b.clk-a.clk).slice(0,10);
+  };
+  const mtdRangeTxt=r=>r?`${md(r.since)}~${md(r.until)}`:'';
+
   return `
   <div class="grid2">
     ${tbl('⚡ 어제 TOP 10', `${KWD?md(KWD.day):''} · 클릭순 · 브랜드 키워드 제외`, curTop)}
     ${tbl('📅 작년 동요일 TOP 10', PY?`${md(PY.date)} · 클릭순 · 브랜드 키워드 제외`:'', lyTop)}
-  </div>`;
+  </div>
+  ${KWM?`<div class="grid2">
+    ${tbl('📆 이번달 누적 TOP 10', `${mtdRangeTxt(KWM.period)} · 클릭순 · 브랜드 키워드 제외`, mtdAgg('curTop'))}
+    ${tbl('📅 작년 동기간 누적 TOP 10', `${mtdRangeTxt(KWM.ly)} · 클릭순 · 브랜드 키워드 제외`, mtdAgg('lyTop'))}
+  </div>`:''}`;
 }
 // 에어브릿지 검색어(term) → {ord,rev} 매핑 — 계정 구분 없이 키워드 텍스트로 매칭(어제 1일)
 let _abMapCache=null;
