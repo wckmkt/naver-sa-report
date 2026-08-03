@@ -400,7 +400,7 @@ const LMEND=shiftDay(MSTART,-1), LMSTART=LMEND.slice(0,8)+'01';
 
 // ── 상태 ────────────────────────────────────────────────────────────────
 let view='spend';
-let scope='ALL', kind='ALL', device='ALL', trendBy='device', acctBy='device';
+let scope='ALL', kind='ALL', device='ALL', trendBy='device', acctBy='device', mtdSort='clk';
 let sortKey='spend', sortDir=-1;
 let tblQuery='', tblStatus='all';
 let hourMetric='spend', hourBy='all';
@@ -1230,7 +1230,7 @@ function topCompareHTML(){
 
   const PY=KW&&KW.ly;
 
-  const mtdAgg=(field,sortKey)=>{
+  const mtdAgg=(field)=>{
     const agg={};
     ((KWM&&KWM.accounts)||[]).forEach(a=>{ if(scope!=='ALL'&&a.name!==scope) return;
       (a[field]||[]).forEach(r=>{
@@ -1238,32 +1238,37 @@ function topCompareHTML(){
         const o=agg[kw]||(agg[kw]={kw,imp:0,clk:0,cost:0});
         o.imp+=r[1]; o.clk+=r[2]; o.cost+=r[3];
       });});
-    return Object.values(agg).sort((a,b)=>b[sortKey]-a[sortKey]).slice(0,10);
+    return Object.values(agg).sort((a,b)=>b[mtdSort]-a[mtdSort]).slice(0,10);
   };
   const mtdRangeTxt=r=>r?`${md(r.since)}~${md(r.until)}`:'';
-  const impRowsHtml=list=>list.map((k,i)=>`<tr>
+  const mtdRowsHtml=list=>list.map((k,i)=>`<tr>
     <td class="l">${i+1}</td><td class="l" title="${k.kw}">${k.kw}</td>
-    <td>${int(k.imp)}</td><td>${int(k.clk)}</td><td>${(k.imp?k.clk/k.imp*100:0).toFixed(1)}%</td>
-  </tr>`).join('')||'<tr><td colspan="5" class="empty">데이터 없음</td></tr>';
-  const impTbl=(title,hint,list)=>`
+    <td>${int(k.imp)}</td><td>${int(k.clk)}</td>
+    <td>${won(Math.round(k.clk?k.cost/k.clk:0))}</td><td>${(k.imp?k.clk/k.imp*100:0).toFixed(1)}%</td>
+  </tr>`).join('')||'<tr><td colspan="6" class="empty">데이터 없음</td></tr>';
+  const mtdTbl=(title,hint,list)=>`
     <div class="panel tight"><div class="ph"><h2>${title} <span class="hint">${hint}</span></h2></div>
       <div class="tblwrap"><table><thead><tr>
-        <th class="l">#</th><th class="l">키워드</th><th>노출수</th><th>클릭수</th><th>CTR</th>
-      </tr></thead><tbody>${impRowsHtml(list)}</tbody></table></div></div>`;
+        <th class="l">#</th><th class="l">키워드</th><th>노출수</th><th>클릭수</th><th>CPC</th><th>CTR</th>
+      </tr></thead><tbody>${mtdRowsHtml(list)}</tbody></table></div></div>`;
 
   return `
   <div class="grid2">
     ${tbl('⚡ 어제 TOP 10', `${KWD?md(KWD.day):''} · 클릭순 · 브랜드 키워드 제외`, curTop)}
     ${tbl('📅 작년 동요일 TOP 10', PY?`${md(PY.date)} · 클릭순 · 브랜드 키워드 제외`:'', lyTop)}
   </div>
-  ${KWM?`<div class="grid2">
-    ${tbl('📆 이번달 누적 TOP 10 · 클릭순', `${mtdRangeTxt(KWM.period)} · 브랜드 키워드 제외`, mtdAgg('curTop','clk'))}
-    ${tbl('📅 작년 동기간 누적 TOP 10 · 클릭순', `${mtdRangeTxt(KWM.ly)} · 브랜드 키워드 제외`, mtdAgg('lyTop','clk'))}
-  </div>
+  ${KWM?`
+  <div class="ph" style="margin-top:16px"><h2 style="font-size:14px">이번달 누적 vs 작년 동기간 누적
+    <span class="hint">브랜드 키워드 제외</span></h2>
+    <div class="grp"><span class="lbl">정렬</span><div class="seg" id="mtdSortSeg"></div></div></div>
   <div class="grid2">
-    ${impTbl('📆 이번달 누적 TOP 10 · 노출순', `${mtdRangeTxt(KWM.period)} · 브랜드 키워드 제외 <span style="color:var(--muted)">· 클릭 상위 300 검색어 범위 내 집계</span>`, mtdAgg('curTop','imp'))}
-    ${impTbl('📅 작년 동기간 누적 TOP 10 · 노출순', `${mtdRangeTxt(KWM.ly)} · 브랜드 키워드 제외 <span style="color:var(--muted)">· 클릭 상위 300 검색어 범위 내 집계</span>`, mtdAgg('lyTop','imp'))}
+    ${mtdTbl('📆 이번달 누적 TOP 10', mtdRangeTxt(KWM.period), mtdAgg('curTop'))}
+    ${mtdTbl('📅 작년 동기간 누적 TOP 10', mtdRangeTxt(KWM.ly), mtdAgg('lyTop'))}
   </div>`:''}`;
+}
+function wireMtdSortSeg(){
+  if(!KWM) return;
+  seg('mtdSortSeg',[['clk','클릭순'],['imp','노출순']],mtdSort,v=>{mtdSort=v;renderKw();});
 }
 // 에어브릿지 검색어(term) → {ord,rev} 매핑 — 계정 구분 없이 키워드 텍스트로 매칭(어제 1일)
 let _abMapCache=null;
@@ -1283,6 +1288,7 @@ function renderKw(){
       7일 스냅샷 데이터가 없습니다 (위 '어제 이슈'와 별개).<br>
       터미널에서 <code>python naver_kw_collect.py</code> 를 실행하세요 (기본: 최근 7일 + 직전 7일 비교).<br>
       <span style="font-size:12px">기간 조정: <code>python naver_kw_collect.py --days 30</code></span></div></div>`;
+    wireMtdSortSeg();
     return;
   }
   const rows=kwRows(); const med=gradeKw(rows);
@@ -1343,6 +1349,7 @@ function renderKw(){
   </div>`;
   seg('kwGradeSeg',[['all','전체'],['우수','우수'],['보통','보통'],['비효율','비효율'],['소량','소량']],kwGrade,
     v=>{kwGrade=v;renderKwTable();},{});
+  wireMtdSortSeg();
   const si=document.getElementById('kwSearch');
   si.oninput=e=>{kwQuery=e.target.value;renderKwTable();};
   renderKwTable(); renderKwScatter(rows);
