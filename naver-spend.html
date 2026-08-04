@@ -1230,13 +1230,25 @@ function topCompareHTML(){
 
   const PY=KW&&KW.ly;
 
-  const mtdAgg=(field)=>{
+  // 이번달 누적(올해)은 naver_kw_collect.py --mtd가 이미 받아둔 KW(키워드 상세)에서
+  // 그대로 집계 — naver_kw_mtd.py가 같은 기간을 또 조회하던 중복을 없앰(2026-08-04).
+  const mtdCurTop=()=>{
+    const agg={};
+    kwRows().forEach(k=>{   // kwRows()가 이미 scope/kind==='SA' 필터를 적용함
+      if(BRAND_KW_RE.test(k.kw)) return;
+      const o=agg[k.kw]||(agg[k.kw]={kw:k.kw,imp:0,clk:0,cost:0});
+      o.imp+=k.imp; o.clk+=k.clk; o.cost+=k.cost;
+    });
+    return Object.values(agg).sort((a,b)=>b[mtdSort]-a[mtdSort]).slice(0,10);
+  };
+  const mtdLyTop=()=>{
+    const LMC=(KWM&&KWM.lyCols)||['kw','imp','clk','cost'], lmix={}; LMC.forEach((c,i)=>lmix[c]=i);
     const agg={};
     ((KWM&&KWM.accounts)||[]).forEach(a=>{ if(scope!=='ALL'&&a.name!==scope) return;
-      (a[field]||[]).forEach(r=>{
-        const kw=r[0]; if(BRAND_KW_RE.test(kw)) return;
+      (a.lyTop||[]).forEach(r=>{
+        const kw=r[lmix.kw]; if(BRAND_KW_RE.test(kw)) return;
         const o=agg[kw]||(agg[kw]={kw,imp:0,clk:0,cost:0});
-        o.imp+=r[1]; o.clk+=r[2]; o.cost+=r[3];
+        o.imp+=r[lmix.imp]; o.clk+=r[lmix.clk]; o.cost+=r[lmix.cost];
       });});
     return Object.values(agg).sort((a,b)=>b[mtdSort]-a[mtdSort]).slice(0,10);
   };
@@ -1257,17 +1269,17 @@ function topCompareHTML(){
     ${tbl('⚡ 어제 TOP 10', `${KWD?md(KWD.day):''} · 클릭순 · 브랜드 키워드 제외`, curTop)}
     ${tbl('📅 작년 동요일 TOP 10', PY?`${md(PY.date)} · 클릭순 · 브랜드 키워드 제외`:'', lyTop)}
   </div>
-  ${KWM?`
+  ${(KW||KWM)?`
   <div class="ph" style="margin-top:16px"><h2 style="font-size:14px">이번달 누적 vs 작년 동기간 누적
     <span class="hint">브랜드 키워드 제외</span></h2>
     <div class="grp"><span class="lbl">정렬</span><div class="seg" id="mtdSortSeg"></div></div></div>
   <div class="grid2">
-    ${mtdTbl('📆 이번달 누적 TOP 10', mtdRangeTxt(KWM.period), mtdAgg('curTop'))}
-    ${mtdTbl('📅 작년 동기간 누적 TOP 10', mtdRangeTxt(KWM.ly), mtdAgg('lyTop'))}
+    ${mtdTbl('📆 이번달 누적 TOP 10', mtdRangeTxt(KW&&KW.period), mtdCurTop())}
+    ${mtdTbl('📅 작년 동기간 누적 TOP 10', mtdRangeTxt(KWM&&KWM.ly), mtdLyTop())}
   </div>`:''}`;
 }
 function wireMtdSortSeg(){
-  if(!KWM) return;
+  if(!KW&&!KWM) return;
   seg('mtdSortSeg',[['clk','클릭순'],['imp','노출순']],mtdSort,v=>{mtdSort=v;renderKw();});
 }
 // 에어브릿지 검색어(term) → {ord,rev} 매핑 — 계정 구분 없이 키워드 텍스트로 매칭(어제 1일)
