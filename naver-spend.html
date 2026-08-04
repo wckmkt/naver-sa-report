@@ -123,9 +123,11 @@ input[type=date]:focus,input[type=number]:focus{border-color:var(--axis)}
 /* table */
 .tblwrap{overflow-x:auto;max-height:620px}
 table{border-collapse:collapse;width:100%;font-size:12.5px}
+table.fixedcol{table-layout:fixed}
 th,td{padding:8px 10px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--grid)}
 th{color:var(--muted);font-weight:600;font-size:11px;position:sticky;top:0;background:var(--surface);cursor:pointer;user-select:none;z-index:1}
 th.l,td.l{text-align:left}
+td.kwcell{overflow:hidden;text-overflow:ellipsis}
 td.num{font-variant-numeric:tabular-nums}
 tbody tr:hover td{background:color-mix(in srgb,var(--ink) 3.5%,transparent)}
 .ref{color:var(--muted)}
@@ -139,8 +141,7 @@ tbody tr:hover td{background:color-mix(in srgb,var(--ink) 3.5%,transparent)}
 .tag-bad{background:color-mix(in srgb,var(--critical) 14%,transparent);color:var(--critical)}
 .warnrow td{background:color-mix(in srgb,var(--critical) 8%,transparent)!important}
 .pausedrow td:not(.keep){color:var(--muted)}
-.subtot td{background:color-mix(in srgb,var(--ink) 4%,transparent);font-weight:700;border-top:2px solid var(--axis);
-  position:sticky;bottom:0}
+.subtot td{background:color-mix(in srgb,var(--ink) 4%,transparent);font-weight:700;border-top:2px solid var(--axis)}
 .bar{position:relative;height:15px;width:96px;background:var(--seq-bg);border-radius:4px;overflow:hidden;display:inline-block;vertical-align:middle}
 .bar>span{position:absolute;left:0;top:0;bottom:0;background:var(--seq);border-radius:4px}
 .bar.over>span{background:var(--critical)}
@@ -1233,12 +1234,14 @@ function topCompareHTML(){
   const lyTop=Object.values(lyAgg).sort((a,b)=>b.clk-a.clk).slice(0,10);
 
   const rowsHtml=list=>list.map((k,i)=>`<tr>
-    <td class="l">${i+1}</td><td class="l" title="${k.kw}">${k.kw}</td>
+    <td class="l">${i+1}</td><td class="l kwcell" title="${k.kw}">${k.kw}</td>
     <td>${int(k.clk)}</td><td>${won(Math.round(k.clk?k.cost/k.clk:0))}</td><td>${(k.imp?k.clk/k.imp*100:0).toFixed(1)}%</td>
   </tr>`).join('')||'<tr><td colspan="5" class="empty">데이터 없음</td></tr>';
   const tbl=(title,hint,list)=>`
     <div class="panel tight"><div class="ph"><h2>${title} <span class="hint">${hint}</span></h2></div>
-      <div class="tblwrap"><table><thead><tr>
+      <div class="tblwrap"><table class="fixedcol">
+      <colgroup><col style="width:32px"><col style="width:130px"><col style="width:70px"><col style="width:70px"><col style="width:60px"></colgroup>
+      <thead><tr>
         <th class="l">#</th><th class="l">키워드</th><th>클릭수</th><th>CPC</th><th>CTR</th>
       </tr></thead><tbody>${rowsHtml(list)}</tbody></table></div></div>`;
 
@@ -1260,13 +1263,15 @@ function topCompareHTML(){
   };
   const mtdRangeTxt=r=>r?`${md(r.since)}~${md(r.until)}`:'';
   const mtdRowsHtml=list=>list.map((k,i)=>`<tr>
-    <td class="l">${i+1}</td><td class="l" title="${k.kw}">${k.kw}</td>
+    <td class="l">${i+1}</td><td class="l kwcell" title="${k.kw}">${k.kw}</td>
     <td>${int(k.imp)}</td><td>${int(k.clk)}</td>
     <td>${won(Math.round(k.clk?k.cost/k.clk:0))}</td><td>${(k.imp?k.clk/k.imp*100:0).toFixed(1)}%</td>
   </tr>`).join('')||'<tr><td colspan="6" class="empty">데이터 없음</td></tr>';
   const mtdTbl=(title,hint,list)=>`
     <div class="panel tight"><div class="ph"><h2>${title} <span class="hint">${hint}</span></h2></div>
-      <div class="tblwrap"><table><thead><tr>
+      <div class="tblwrap"><table class="fixedcol">
+      <colgroup><col style="width:32px"><col style="width:130px"><col style="width:70px"><col style="width:70px"><col style="width:70px"><col style="width:60px"></colgroup>
+      <thead><tr>
         <th class="l">#</th><th class="l">키워드</th><th>노출수</th><th>클릭수</th><th>CPC</th><th>CTR</th>
       </tr></thead><tbody>${mtdRowsHtml(list)}</tbody></table></div></div>`;
 
@@ -1352,7 +1357,12 @@ function renderKw(){
         <div class="seg" id="kwGradeSeg"></div>
       </div>
     </div>
-    <div class="tblwrap"><table id="kwtbl"><thead><tr>
+    <div class="tblwrap"><table id="kwtbl" class="fixedcol">
+      <colgroup><col style="width:150px"><col style="width:90px"><col style="width:90px">
+        <col style="width:70px"><col style="width:60px"><col style="width:60px">
+        <col style="width:70px"><col style="width:80px"><col style="width:70px"><col style="width:80px">
+        <col style="width:70px"><col style="width:90px"><col style="width:60px"></colgroup>
+      <thead><tr>
       <th class="l" data-k="kw">키워드</th>
       <th data-k="cost">비용</th><th data-k="dCost">비용 증감</th>
       <th data-k="imp">노출</th><th data-k="clk">클릭</th><th data-k="ctr">CTR</th>
@@ -1394,7 +1404,7 @@ function renderKwTable(){
   const dcell=(v,fmt,good)=>{const col=v>0?(good?'var(--pc)':'var(--critical)'):v<0?(good?'var(--critical)':'var(--pc)'):'var(--muted)';
     return `<td class="num" style="color:${col}">${v>0?'+':''}${fmt(v)}</td>`;};
   document.querySelector('#kwtbl tbody').innerHTML=shown.map(k=>`<tr>
-    <td class="l keep" title="${k.kw}">${k.kw}</td>
+    <td class="l keep kwcell" title="${k.kw}">${k.kw}</td>
     <td class="num">${won(k.cost)}</td>${dcell(k.dCost,v=>krw(Math.abs(v)),true)}
     <td class="num">${int(k.imp)}</td><td class="num">${int(k.clk)}</td><td class="num">${k.ctr.toFixed(2)}%</td>
     <td class="num">${won(Math.round(k.cpc))}</td>${dcell(Math.round(k.dCpc),v=>won(Math.abs(v)),false)}
