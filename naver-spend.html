@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>네이버 검색광고 소진현황</title>
+<title>네이버 검색광고 대시보드</title>
 <script src="chart.umd.min.js"></script>
 <style>
 :root{
@@ -469,10 +469,10 @@ function exportSpendCSV(){
   downloadCSV(`naver_소진_rawdata_${pFrom}_${pTo}.csv`,rows);
 }
 function exportKwCSV(){
-  const rows=[['계정','키워드','기기','입찰가','노출','클릭','비용','CTR(%)','CPC','평균순위',
+  const rows=[['계정','키워드','입찰가','노출','클릭','비용','CTR(%)','CPC','평균순위',
                '직전노출','직전클릭','직전비용','직전CPC','비용증감','CPC증감',
                '전환(에어브릿지·어제)','매출(에어브릿지·어제)','전환수(네이버·참고)','전환매출(네이버·참고)']];
-  kwRows().forEach(k=>rows.push([k.acct,k.kw,DL[k.device]||k.device,k.bid,
+  kwRows().forEach(k=>rows.push([k.acct,k.kw,k.bid,
     k.imp,k.clk,k.cost,k.ctr.toFixed(2),Math.round(k.cpc),k.rnk,
     k.pImp,k.pClk,k.pCost,Math.round(k.pcpc),k.cost-k.pCost,Math.round(k.cpc-k.pcpc),
     k.abOrd,k.abRev,k.conv,k.convAmt]));
@@ -1155,27 +1155,41 @@ function kwDailyHTML(){
 }
 
 // ══════════════ 키워드 ══════════════
+// 2026-08-04: 기기(PC/모바일) 구분 없이 키워드 텍스트 단위로 합쳐서 보여달라는 요청 —
+// 계정+키워드 단위로 원시행을 합산한 뒤 CTR/CPC 등 비율지표를 합산치에서 재계산한다.
+// 입찰가·평균순위는 기기마다 다를 수 있어 클릭수 가중평균으로 대표값을 만든다
+// (클릭 0인 키워드는 균등평균 — 순위는 그마저도 의미 없어 0).
 let _kwCache={key:null,rows:null};
 function kwRows(){
   if(!KW) return [];
   const ck=scope+'|'+kind+'|'+device;
   if(_kwCache.key===ck) return _kwCache.rows;      // 검색어 입력마다 수만 행 재구성 방지
   const C=KW.cols, ix={}; C.forEach((c,i)=>ix[c]=i);
-  const out=[];
+  const agg={};
   KW.accounts.forEach(a=>{ if(scope!=='ALL'&&a.name!==scope) return;
     a.keywords.forEach(r=>{
-      const k={acct:a.name,kw:r[ix.kw],camp:r[ix.camp],grp:r[ix.grp],kind:r[ix.kind],device:r[ix.device],
-        bid:r[ix.bid],imp:r[ix.imp],clk:r[ix.clk],cost:r[ix.cost],conv:r[ix.conv],convAmt:r[ix.convAmt],
-        rnk:r[ix.rnk],pImp:r[ix.pImp],pClk:r[ix.pClk],pCost:r[ix.pCost],pConv:r[ix.pConv],pConvAmt:r[ix.pConvAmt]};
-      if(k.kind!=='SA') return;   // 키워드탭은 파워링크만(쇼핑검색은 등록 키워드가 사실상 없어 노이즈)
-      if(device!=='ALL'&&k.device!==device) return;
-      k.ctr=k.imp?k.clk/k.imp*100:0; k.cpc=k.clk?k.cost/k.clk:0;
-      k.pctr=k.pImp?k.pClk/k.pImp*100:0; k.pcpc=k.pClk?k.pCost/k.pClk:0;
-      k.cpa=k.conv?k.cost/k.conv:0; k.roas=k.cost?k.convAmt/k.cost*100:0;
-      k.dCost=k.cost-k.pCost; k.dCpc=k.cpc-k.pcpc; k.dClk=k.clk-k.pClk;
-      const ab=airbridgeTermMap()[k.kw]; k.abOrd=ab?ab.ord:0; k.abRev=ab?ab.rev:0;
-      out.push(k);
+      if(r[ix.kind]!=='SA') return;   // 키워드탭은 파워링크만(쇼핑검색은 등록 키워드가 사실상 없어 노이즈)
+      const dev=r[ix.device]; if(device!=='ALL'&&dev!==device) return;
+      const kw=r[ix.kw], key=a.name+'|'+kw;
+      const o=agg[key]||(agg[key]={acct:a.name,kw,imp:0,clk:0,cost:0,conv:0,convAmt:0,
+        pImp:0,pClk:0,pCost:0,pConv:0,pConvAmt:0,bidSum:0,bidW:0,rnkSum:0,rnkW:0});
+      const clk=r[ix.clk];
+      o.imp+=r[ix.imp]; o.clk+=clk; o.cost+=r[ix.cost]; o.conv+=r[ix.conv]; o.convAmt+=r[ix.convAmt];
+      o.pImp+=r[ix.pImp]; o.pClk+=r[ix.pClk]; o.pCost+=r[ix.pCost]; o.pConv+=r[ix.pConv]; o.pConvAmt+=r[ix.pConvAmt];
+      const bw=clk||1; o.bidSum+=r[ix.bid]*bw; o.bidW+=bw;
+      o.rnkSum+=(r[ix.rnk]||0)*clk; o.rnkW+=clk;
     });});
+  const out=Object.values(agg).map(o=>{
+    const k={acct:o.acct,kw:o.kw,imp:o.imp,clk:o.clk,cost:o.cost,conv:o.conv,convAmt:o.convAmt,
+      pImp:o.pImp,pClk:o.pClk,pCost:o.pCost,pConv:o.pConv,pConvAmt:o.pConvAmt,
+      bid:o.bidW?Math.round(o.bidSum/o.bidW):0, rnk:o.rnkW?Math.round(o.rnkSum/o.rnkW*10)/10:0};
+    k.ctr=k.imp?k.clk/k.imp*100:0; k.cpc=k.clk?k.cost/k.clk:0;
+    k.pctr=k.pImp?k.pClk/k.pImp*100:0; k.pcpc=k.pClk?k.pCost/k.pClk:0;
+    k.cpa=k.conv?k.cost/k.conv:0; k.roas=k.cost?k.convAmt/k.cost*100:0;
+    k.dCost=k.cost-k.pCost; k.dCpc=k.cpc-k.pcpc; k.dClk=k.clk-k.pClk;
+    const ab=airbridgeTermMap()[k.kw]; k.abOrd=ab?ab.ord:0; k.abRev=ab?ab.rev:0;
+    return k;
+  });
   _kwCache={key:ck,rows:out};
   return out;
 }
@@ -1230,25 +1244,17 @@ function topCompareHTML(){
 
   const PY=KW&&KW.ly;
 
-  // 이번달 누적(올해)은 naver_kw_collect.py --mtd가 이미 받아둔 KW(키워드 상세)에서
-  // 그대로 집계 — naver_kw_mtd.py가 같은 기간을 또 조회하던 중복을 없앰(2026-08-04).
-  const mtdCurTop=()=>{
-    const agg={};
-    kwRows().forEach(k=>{   // kwRows()가 이미 scope/kind==='SA' 필터를 적용함
-      if(BRAND_KW_RE.test(k.kw)) return;
-      const o=agg[k.kw]||(agg[k.kw]={kw:k.kw,imp:0,clk:0,cost:0});
-      o.imp+=k.imp; o.clk+=k.clk; o.cost+=k.cost;
-    });
-    return Object.values(agg).sort((a,b)=>b[mtdSort]-a[mtdSort]).slice(0,10);
-  };
-  const mtdLyTop=()=>{
-    const LMC=(KWM&&KWM.lyCols)||['kw','imp','clk','cost'], lmix={}; LMC.forEach((c,i)=>lmix[c]=i);
+  // 이번달 누적(올해)·작년 동기간 모두 KWM(naver_kw_mtd.py) 전용 데이터 — 하단 '키워드
+  // 상세'가 완료주간(월~일) 기준으로 바뀌면서(2026-08-04) 기간이 서로 달라져 KW에서
+  // 대신 뽑아쓸 수 없다(DA 주간 리포팅용 표와 SA 월 누적 트렌드 패널은 목적이 다름).
+  const mtdAgg=(field)=>{
+    const MC=(KWM&&KWM.cols)||['kw','imp','clk','cost'], mix={}; MC.forEach((c,i)=>mix[c]=i);
     const agg={};
     ((KWM&&KWM.accounts)||[]).forEach(a=>{ if(scope!=='ALL'&&a.name!==scope) return;
-      (a.lyTop||[]).forEach(r=>{
-        const kw=r[lmix.kw]; if(BRAND_KW_RE.test(kw)) return;
+      (a[field]||[]).forEach(r=>{
+        const kw=r[mix.kw]; if(BRAND_KW_RE.test(kw)) return;
         const o=agg[kw]||(agg[kw]={kw,imp:0,clk:0,cost:0});
-        o.imp+=r[lmix.imp]; o.clk+=r[lmix.clk]; o.cost+=r[lmix.cost];
+        o.imp+=r[mix.imp]; o.clk+=r[mix.clk]; o.cost+=r[mix.cost];
       });});
     return Object.values(agg).sort((a,b)=>b[mtdSort]-a[mtdSort]).slice(0,10);
   };
@@ -1269,17 +1275,17 @@ function topCompareHTML(){
     ${tbl('⚡ 어제 TOP 10', `${KWD?md(KWD.day):''} · 클릭순 · 브랜드 키워드 제외`, curTop)}
     ${tbl('📅 작년 동요일 TOP 10', PY?`${md(PY.date)} · 클릭순 · 브랜드 키워드 제외`:'', lyTop)}
   </div>
-  ${(KW||KWM)?`
+  ${KWM?`
   <div class="ph" style="margin-top:16px"><h2 style="font-size:14px">이번달 누적 vs 작년 동기간 누적
     <span class="hint">브랜드 키워드 제외</span></h2>
     <div class="grp"><span class="lbl">정렬</span><div class="seg" id="mtdSortSeg"></div></div></div>
   <div class="grid2">
-    ${mtdTbl('📆 이번달 누적 TOP 10', mtdRangeTxt(KW&&KW.period), mtdCurTop())}
-    ${mtdTbl('📅 작년 동기간 누적 TOP 10', mtdRangeTxt(KWM&&KWM.ly), mtdLyTop())}
+    ${mtdTbl('📆 이번달 누적 TOP 10', mtdRangeTxt(KWM.period), mtdAgg('curTop'))}
+    ${mtdTbl('📅 작년 동기간 누적 TOP 10', mtdRangeTxt(KWM.ly), mtdAgg('lyTop'))}
   </div>`:''}`;
 }
 function wireMtdSortSeg(){
-  if(!KW&&!KWM) return;
+  if(!KWM) return;
   seg('mtdSortSeg',[['clk','클릭순'],['imp','노출순']],mtdSort,v=>{mtdSort=v;renderKw();});
 }
 // 에어브릿지 검색어(term) → {ord,rev} 매핑 — 계정 구분 없이 키워드 텍스트로 매칭(어제 1일)
@@ -1347,7 +1353,7 @@ function renderKw(){
       </div>
     </div>
     <div class="tblwrap"><table id="kwtbl"><thead><tr>
-      <th class="l" data-k="kw">키워드</th><th class="l" data-k="device">기기</th>
+      <th class="l" data-k="kw">키워드</th>
       <th data-k="cost">비용</th><th data-k="dCost">비용 증감</th>
       <th data-k="imp">노출</th><th data-k="clk">클릭</th><th data-k="ctr">CTR</th>
       <th data-k="cpc">CPC</th><th data-k="dCpc">CPC 증감</th>
@@ -1357,7 +1363,8 @@ function renderKw(){
       <th class="l" data-k="grade">등급</th>
     </tr></thead><tbody></tbody></table></div>
     <div class="foot">등급은 <b>현재 필터 안의 중앙값</b> 기준 상대평가입니다(클릭 3회 미만은 '소량'으로 제외).
-      ${AB?'전환·매출은 에어브릿지 검색어 매칭 기준 <b>어제 하루</b>치입니다(표는 기간 합계라 스코프가 다름) · 계정 선택 시에도 전체 채널 기준':'전환·ROAS는 네이버 전환태그 과소계상으로 참고용'} · 평균순위는 파워링크만 제공됩니다.</div>
+      ${AB?'전환·매출은 에어브릿지 검색어 매칭 기준 <b>어제 하루</b>치입니다(표는 기간 합계라 스코프가 다름) · 계정 선택 시에도 전체 채널 기준':'전환·ROAS는 네이버 전환태그 과소계상으로 참고용'} · 평균순위는 파워링크만 제공됩니다(기기별 값을 클릭수 가중평균).<br>
+      <b>비용 증감·CPC 증감</b>은 위 안내의 <b>직전기간(${PV.since}~${PV.until})</b> 대비입니다 · 기기(PC/모바일)는 키워드 단위로 합산되어 표시됩니다.</div>
   </div>`;
   seg('kwGradeSeg',[['all','전체'],['우수','우수'],['보통','보통'],['비효율','비효율'],['소량','소량']],kwGrade,
     v=>{kwGrade=v;renderKwTable();},{});
@@ -1378,7 +1385,7 @@ function renderKwTable(){
   if(kwGrade!=='all') rows=rows.filter(k=>k.grade===kwGrade);
   if(kwQuery.trim()){const q=kwQuery.trim().toLowerCase();
     rows=rows.filter(k=>k.kw.toLowerCase().includes(q));}
-  const strK=new Set(['kw','device','grade']);
+  const strK=new Set(['kw','grade']);
   rows.sort((a,b)=>strK.has(kwSort)?String(a[kwSort]).localeCompare(String(b[kwSort]),'ko')*kwDir
     :((a[kwSort]||0)-(b[kwSort]||0))*kwDir);
   const shown=rows.slice(0,300);
@@ -1387,19 +1394,19 @@ function renderKwTable(){
   const dcell=(v,fmt,good)=>{const col=v>0?(good?'var(--pc)':'var(--critical)'):v<0?(good?'var(--critical)':'var(--pc)'):'var(--muted)';
     return `<td class="num" style="color:${col}">${v>0?'+':''}${fmt(v)}</td>`;};
   document.querySelector('#kwtbl tbody').innerHTML=shown.map(k=>`<tr>
-    <td class="l keep" title="${k.kw}">${k.kw}</td><td class="l">${devTag(k.device)}</td>
+    <td class="l keep" title="${k.kw}">${k.kw}</td>
     <td class="num">${won(k.cost)}</td>${dcell(k.dCost,v=>krw(Math.abs(v)),true)}
     <td class="num">${int(k.imp)}</td><td class="num">${int(k.clk)}</td><td class="num">${k.ctr.toFixed(2)}%</td>
     <td class="num">${won(Math.round(k.cpc))}</td>${dcell(Math.round(k.dCpc),v=>won(Math.abs(v)),false)}
     <td class="num ref">${k.rnk||'—'}</td><td class="num ref">${k.bid?won(k.bid):'—'}</td>
     <td class="num ref">${k.abOrd||'—'}</td><td class="num ref">${k.abRev?krw(k.abRev):'—'}</td>
     <td class="l">${gtag(k.grade)}</td></tr>`).join('')
-    +`<tr class="subtot"><td class="l" colspan="2">표시 ${shown.length} / 전체 ${rows.length}개 (전체는 CSV 다운로드)</td>
+    +`<tr class="subtot"><td class="l">표시 ${shown.length} / 전체 ${rows.length}개 (전체는 CSV 다운로드)</td>
       <td class="num">${won(rows.reduce((s,k)=>s+k.cost,0))}</td><td></td>
       <td class="num">${int(rows.reduce((s,k)=>s+k.imp,0))}</td><td class="num">${int(rows.reduce((s,k)=>s+k.clk,0))}</td>
       <td colspan="8"></td></tr>`;
   document.querySelectorAll('#kwtbl th').forEach(th=>{th.onclick=()=>{const k=th.dataset.k;
-    if(k===kwSort)kwDir*=-1;else{kwSort=k;kwDir=new Set(['kw','device','grade']).has(k)?1:-1;}
+    if(k===kwSort)kwDir*=-1;else{kwSort=k;kwDir=new Set(['kw','grade']).has(k)?1:-1;}
     renderKwTable();};});
 }
 let kwChart;
