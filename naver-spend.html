@@ -488,6 +488,21 @@ function exportKwDailyCSV(){
     k.wImp,k.wClk,k.wCost,k.clk-k.wClk]));
   downloadCSV(`naver_키워드_전일자_rawdata_${KWD.day}.csv`,rows);
 }
+function exportKwMtdCSV(){
+  if(!KWM) return;
+  const rows=[['구분','계정','키워드','노출','클릭','비용','CTR(%)','CPC','평균순위']];
+  const push=(field,label,cols)=>{
+    const mix={}; cols.forEach((c,i)=>mix[c]=i);
+    (KWM.accounts||[]).forEach(a=>(a[field]||[]).forEach(r=>{
+      const imp=r[mix.imp], clk=r[mix.clk], cost=r[mix.cost];
+      rows.push([label,a.name,r[mix.kw],imp,clk,cost,(imp?clk/imp*100:0).toFixed(2),
+        clk?Math.round(cost/clk):0, mix.rnk!=null?r[mix.rnk]:'']);
+    }));
+  };
+  push('curTop',`이번달(${KWM.period.since}~${KWM.period.until})`,KWM.cols);
+  push('lyTop',`작년동기간(${KWM.ly.since}~${KWM.ly.until})`,KWM.lyCols);
+  downloadCSV(`naver_키워드_MTD비교_${KWM.period.since}_${KWM.period.until}.csv`,rows);
+}
 
 // ── 헤더 / 컨트롤 ───────────────────────────────────────────────────────
 function renderHeader(){
@@ -1288,7 +1303,8 @@ function topCompareHTML(){
   ${KWM?`
   <div class="ph" style="margin-top:16px"><h2 style="font-size:14px">이번달 누적 vs 작년 동기간 누적
     <span class="hint">브랜드 키워드 제외 · 회색 배경 = 양쪽 다 TOP10인 키워드(CPC 비교용)</span></h2>
-    <div class="grp"><span class="lbl">정렬</span><div class="seg" id="mtdSortSeg"></div></div></div>
+    <div class="grp"><button class="ghost" onclick="exportKwMtdCSV()">⬇ MTD CSV</button>
+    <span class="lbl">정렬</span><div class="seg" id="mtdSortSeg"></div></div></div>
   <div class="grid2">
     ${mtdTbl('📆 이번달 누적 TOP 10', mtdRangeTxt(KWM.period), mtdCur, mtdShared)}
     ${mtdTbl('📅 작년 동기간 누적 TOP 10', mtdRangeTxt(KWM.ly), mtdLy, mtdShared)}
