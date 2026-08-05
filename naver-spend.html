@@ -142,6 +142,7 @@ tbody tr:hover td{background:color-mix(in srgb,var(--ink) 3.5%,transparent)}
 .warnrow td{background:color-mix(in srgb,var(--critical) 8%,transparent)!important}
 .pausedrow td:not(.keep){color:var(--muted)}
 .subtot td{background:color-mix(in srgb,var(--ink) 4%,transparent);font-weight:700;border-top:2px solid var(--axis)}
+.mtdmatch td{background:color-mix(in srgb,var(--ink) 6%,transparent)!important}
 .bar{position:relative;height:15px;width:96px;background:var(--seq-bg);border-radius:4px;overflow:hidden;display:inline-block;vertical-align:middle}
 .bar>span{position:absolute;left:0;top:0;bottom:0;background:var(--seq);border-radius:4px}
 .bar.over>span{background:var(--critical)}
@@ -1262,18 +1263,22 @@ function topCompareHTML(){
     return Object.values(agg).sort((a,b)=>b[mtdSort]-a[mtdSort]).slice(0,10);
   };
   const mtdRangeTxt=r=>r?`${md(r.since)}~${md(r.until)}`:'';
-  const mtdRowsHtml=list=>list.map((k,i)=>`<tr>
+  const mtdRowsHtml=(list,shared)=>list.map((k,i)=>`<tr${shared&&shared.has(k.kw)?' class="mtdmatch"':''}>
     <td class="l">${i+1}</td><td class="l kwcell" title="${k.kw}">${k.kw}</td>
     <td>${int(k.imp)}</td><td>${int(k.clk)}</td>
     <td>${won(Math.round(k.clk?k.cost/k.clk:0))}</td><td>${(k.imp?k.clk/k.imp*100:0).toFixed(1)}%</td>
   </tr>`).join('')||'<tr><td colspan="6" class="empty">데이터 없음</td></tr>';
-  const mtdTbl=(title,hint,list)=>`
+  const mtdTbl=(title,hint,list,shared)=>`
     <div class="panel tight"><div class="ph"><h2>${title} <span class="hint">${hint}</span></h2></div>
       <div class="tblwrap"><table class="fixedcol">
       <colgroup><col style="width:32px"><col style="width:130px"><col style="width:70px"><col style="width:70px"><col style="width:70px"><col style="width:60px"></colgroup>
       <thead><tr>
         <th class="l">#</th><th class="l">키워드</th><th>노출수</th><th>클릭수</th><th>CPC</th><th>CTR</th>
-      </tr></thead><tbody>${mtdRowsHtml(list)}</tbody></table></div></div>`;
+      </tr></thead><tbody>${mtdRowsHtml(list,shared)}</tbody></table></div></div>`;
+
+  const mtdCur=mtdAgg('curTop'), mtdLy=mtdAgg('lyTop');
+  const mtdCurKws=new Set(mtdCur.map(k=>k.kw));
+  const mtdShared=new Set(mtdLy.filter(k=>mtdCurKws.has(k.kw)).map(k=>k.kw));
 
   return `
   <div class="grid2">
@@ -1282,11 +1287,11 @@ function topCompareHTML(){
   </div>
   ${KWM?`
   <div class="ph" style="margin-top:16px"><h2 style="font-size:14px">이번달 누적 vs 작년 동기간 누적
-    <span class="hint">브랜드 키워드 제외</span></h2>
+    <span class="hint">브랜드 키워드 제외 · 회색 배경 = 양쪽 다 TOP10인 키워드(CPC 비교용)</span></h2>
     <div class="grp"><span class="lbl">정렬</span><div class="seg" id="mtdSortSeg"></div></div></div>
   <div class="grid2">
-    ${mtdTbl('📆 이번달 누적 TOP 10', mtdRangeTxt(KWM.period), mtdAgg('curTop'))}
-    ${mtdTbl('📅 작년 동기간 누적 TOP 10', mtdRangeTxt(KWM.ly), mtdAgg('lyTop'))}
+    ${mtdTbl('📆 이번달 누적 TOP 10', mtdRangeTxt(KWM.period), mtdCur, mtdShared)}
+    ${mtdTbl('📅 작년 동기간 누적 TOP 10', mtdRangeTxt(KWM.ly), mtdLy, mtdShared)}
   </div>`:''}`;
 }
 function wireMtdSortSeg(){
