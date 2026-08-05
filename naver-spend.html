@@ -1263,7 +1263,7 @@ function topCompareHTML(){
     return Object.values(agg).sort((a,b)=>b[mtdSort]-a[mtdSort]).slice(0,10);
   };
   const mtdRangeTxt=r=>r?`${md(r.since)}~${md(r.until)}`:'';
-  const mtdRowsHtml=(list,shared)=>list.map((k,i)=>`<tr${shared&&shared.has(k.kw)?' class="mtdmatch"':''}>
+  const mtdRowsHtml=(list,shared)=>list.map((k,i)=>`<tr${shared&&shared.has(k.kw)?' class="mtdmatch"':''} style="cursor:pointer" onclick="this.classList.toggle('mtdmatch')" title="클릭하면 하이라이트 해제/복원">
     <td class="l">${i+1}</td><td class="l kwcell" title="${k.kw}">${k.kw}</td>
     <td>${int(k.imp)}</td><td>${int(k.clk)}</td>
     <td>${won(Math.round(k.clk?k.cost/k.clk:0))}</td><td>${(k.imp?k.clk/k.imp*100:0).toFixed(1)}%</td>
