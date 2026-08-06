@@ -359,7 +359,8 @@ code{background:color-mix(in srgb,var(--ink) 7%,transparent);padding:1px 6px;bor
     ['naver_kw_data.js', 'window.__kwMissing=1'],
     ['naver_kw_daily_data.js', 'window.__kwdMissing=1'],
     ['naver_kw_mtd_data.js', 'window.__kwmMissing=1'],
-    ['airbridge_conv_data.js', 'window.__abMissing=1']];
+    ['airbridge_conv_data.js', 'window.__abMissing=1'],
+    ['airbridge_conv_mtd_data.js', 'window.__abmMissing=1']];
   files.forEach(function(f){
     var src = Array.isArray(f) ? f[0] : f, onerr = Array.isArray(f) ? f[1] : '';
     document.write('<script src="' + src + '?v=' + v + '"' +
@@ -373,6 +374,7 @@ const KW = window.NAVER_KW || null;
 const KWD = window.NAVER_KW_DAILY || null;
 const KWM = window.NAVER_KW_MTD || null;
 const AB = window.AIRBRIDGE_CONV || null;
+const ABM = window.AIRBRIDGE_CONV_MTD || null;
 if(!D){ document.body.innerHTML='<div class="wrap"><h1>데이터 없음</h1><p>naver_spend_collect.py를 먼저 실행하세요.</p></div>'; }
 
 const KL=(D&&D.kinds)||{SA:'파워링크',SS:'쇼핑검색',ETC:'기타'};
@@ -492,10 +494,11 @@ function kwMtdBackupRows(){
     rnk:o.rnkW?Math.round(o.rnkSum/o.rnkW*10)/10:0}));
 }
 function exportKwCSV(){
+  const abLabel=ABM?`·${ABM.since}~${ABM.until}`:'·MTD 데이터 없음';
   const rows=[['계정','키워드','입찰가','노출','클릭','비용','CTR(%)','CPC','평균순위',
-               '전환(에어브릿지·어제)','매출(에어브릿지·어제)','전환수(네이버·참고)','전환매출(네이버·참고)']];
+               `전환(에어브릿지${abLabel})`,`매출(에어브릿지${abLabel})`,'전환수(네이버·참고)','전환매출(네이버·참고)']];
   kwMtdBackupRows().forEach(k=>{
-    const ab=airbridgeTermMap()[k.kw];
+    const ab=airbridgeMtdTermMap()[k.kw];
     rows.push([k.acct,k.kw,k.bid,k.imp,k.clk,k.cost,
       (k.imp?k.clk/k.imp*100:0).toFixed(2),Math.round(k.clk?k.cost/k.clk:0),k.rnk,
       ab?ab.ord:0,ab?ab.rev:0,k.conv,k.convAmt]);
@@ -1392,6 +1395,15 @@ function airbridgeTermMap(){
   const m={};
   (AB&&AB.byTerm||[]).forEach(r=>{ m[r[ix.term]]={ord:r[ix.orders],rev:r[ix.revenue]}; });
   _abMapCache=m;
+  return m;
+}
+let _abmMapCache=null;
+function airbridgeMtdTermMap(){
+  if(_abmMapCache) return _abmMapCache;
+  const ix={}; (ABM&&ABM.termCols||[]).forEach((c,i)=>ix[c]=i);
+  const m={};
+  (ABM&&ABM.byTerm||[]).forEach(r=>{ m[r[ix.term]]={ord:r[ix.orders],rev:r[ix.revenue]}; });
+  _abmMapCache=m;
   return m;
 }
 function renderKw(){
