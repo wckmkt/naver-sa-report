@@ -488,6 +488,27 @@ function exportKwDailyCSV(){
     k.wImp,k.wClk,k.wCost,k.clk-k.wClk]));
   downloadCSV(`naver_키워드_전일자_rawdata_${KWD.day}.csv`,rows);
 }
+function exportKwYesterdayLyCSV(){
+  const rows=[['구분','계정','키워드','노출','클릭','비용','CTR(%)','CPC','평균순위']];
+  if(KWD){
+    const C=KWD.cols, ix={}; C.forEach((c,i)=>ix[c]=i);
+    (KWD.accounts||[]).forEach(a=>a.keywords.forEach(r=>{
+      if(r[ix.kind]!=='SA') return;
+      const imp=r[ix.imp], clk=r[ix.clk], cost=r[ix.cost];
+      rows.push([`어제(${KWD.day})`,a.name,r[ix.kw],imp,clk,cost,
+        (imp?clk/imp*100:0).toFixed(2), clk?Math.round(cost/clk):0, r[ix.rnk]]);
+    }));
+  }
+  if(KW&&KW.ly){
+    const LC=KW.lyCols||['kw','imp','clk','cost'], lix={}; LC.forEach((c,i)=>lix[c]=i);
+    (KW.accounts||[]).forEach(a=>(a.lyTop||[]).forEach(r=>{
+      const imp=r[lix.imp], clk=r[lix.clk], cost=r[lix.cost];
+      rows.push([`작년동요일(${KW.ly.date})`,a.name,r[lix.kw],imp,clk,cost,
+        (imp?clk/imp*100:0).toFixed(2), clk?Math.round(cost/clk):0, '']);
+    }));
+  }
+  downloadCSV(`naver_키워드_어제vs작년동요일_${KWD?KWD.day:''}.csv`,rows);
+}
 function exportKwMtdCSV(){
   if(!KWM) return;
   const rows=[['구분','계정','키워드','노출','클릭','비용','CTR(%)','CPC','평균순위']];
@@ -1212,6 +1233,29 @@ function kwRows(){
 }
 function median(arr){ if(!arr.length)return 0; const a=[...arr].sort((x,y)=>x-y);
   const m=a.length>>1; return a.length%2?a[m]:(a[m-1]+a[m])/2; }
+// 비용vsCPC 산점도 전용 — 이번달 누적(KWM.curTop) 기준. kwRows()(금주 스냅샷)와는 기간이
+// 다름: 산점도만 MTD로 보고 싶다는 요청 — conv/convAmt는 KWM에 없는 필드라 항상 0
+// (우수 판정 중 "전환 발생" 조건은 이 데이터셋에선 못 걸림, cheap&&hot 경로만 유효).
+let _kwMtdCache={key:null,rows:null};
+function kwMtdRows(){
+  if(!KWM) return [];
+  if(_kwMtdCache.key===scope) return _kwMtdCache.rows;
+  const MC=KWM.cols||['kw','imp','clk','cost','rnk'], mix={}; MC.forEach((c,i)=>mix[c]=i);
+  const agg={};
+  KWM.accounts.forEach(a=>{ if(scope!=='ALL'&&a.name!==scope) return;
+    (a.curTop||[]).forEach(r=>{
+      const kw=r[mix.kw], key=a.name+'|'+kw;
+      const o=agg[key]||(agg[key]={acct:a.name,kw,imp:0,clk:0,cost:0});
+      o.imp+=r[mix.imp]; o.clk+=r[mix.clk]; o.cost+=r[mix.cost];
+    });});
+  const out=Object.values(agg).map(o=>{
+    const k={acct:o.acct,kw:o.kw,imp:o.imp,clk:o.clk,cost:o.cost,conv:0,convAmt:0};
+    k.ctr=k.imp?k.clk/k.imp*100:0; k.cpc=k.clk?k.cost/k.clk:0;
+    return k;
+  });
+  _kwMtdCache={key:scope,rows:out};
+  return out;
+}
 function gradeKw(rows){
   const act=rows.filter(k=>k.clk>=3);
   const mCPC=median(act.map(k=>k.cpc).filter(Boolean))||0;
@@ -1264,8 +1308,8 @@ function topCompareHTML(){
   const PY=KW&&KW.ly;
 
   // 이번달 누적(올해)·작년 동기간 모두 KWM(naver_kw_mtd.py) 전용 데이터 — 하단 '키워드
-  // 상세'가 완료주간(월~일) 기준으로 바뀌면서(2026-08-04) 기간이 서로 달라져 KW에서
-  // 대신 뽑아쓸 수 없다(DA 주간 리포팅용 표와 SA 월 누적 트렌드 패널은 목적이 다름).
+  // 상세'는 금주(월~어제) 매일 누적 스냅샷이라 기간 정의 자체가 달라 KW에서 대신
+  // 뽑아쓸 수 없다(주간 진행중 스냅샷 표와 SA 월 누적 트렌드 패널은 목적이 다름).
   const mtdAgg=(field)=>{
     const MC=(KWM&&KWM.cols)||['kw','imp','clk','cost'], mix={}; MC.forEach((c,i)=>mix[c]=i);
     const agg={};
@@ -1296,6 +1340,9 @@ function topCompareHTML(){
   const mtdShared=new Set(mtdLy.filter(k=>mtdCurKws.has(k.kw)).map(k=>k.kw));
 
   return `
+  <div class="ph" style="margin-top:4px"><h2 style="font-size:14px">어제 vs 작년 동요일 TOP 10
+    <span class="hint">브랜드 키워드 제외</span></h2>
+    <button class="ghost" onclick="exportKwYesterdayLyCSV()">⬇ 어제·작년동요일 CSV</button></div>
   <div class="grid2">
     ${tbl('⚡ 어제 TOP 10', `${KWD?md(KWD.day):''} · 클릭순 · 브랜드 키워드 제외`, curTop)}
     ${tbl('📅 작년 동요일 TOP 10', PY?`${md(PY.date)} · 클릭순 · 브랜드 키워드 제외`:'', lyTop)}
@@ -1341,6 +1388,11 @@ function renderKw(){
   const good=rows.filter(k=>k.grade==='우수').sort((a,b)=>b.cost-a.cost);
   const bad=rows.filter(k=>k.grade==='비효율').sort((a,b)=>b.cost-a.cost);
   const P=KW.period, PV=KW.prev;
+  const mtdRows=kwMtdRows(); if(mtdRows.length) gradeKw(mtdRows);
+  const scatterRows=mtdRows.length?mtdRows:rows;
+  const scatterHint=mtdRows.length
+    ? `이번달 누적(${KWM.period.since}~${KWM.period.until}) 기준 · 점 크기 = 클릭수 · 오른쪽 아래(비용↑ CPC↓)가 효자 키워드`
+    : `${P.since}~${P.until} 기준(MTD 데이터 없음) · 점 크기 = 클릭수 · 오른쪽 아래(비용↑ CPC↓)가 효자 키워드`;
   body.innerHTML=digest+`
   <div class="alert info" style="margin-top:16px">
     📌 키워드 스냅샷 <b>${P.since} ~ ${P.until}</b> (${P.days}일) · 직전기간 <b>${PV.since} ~ ${PV.until}</b> ·
@@ -1367,7 +1419,7 @@ function renderKw(){
   </div>
 
   <div class="panel">
-    <div class="ph"><h2>비용 vs CPC 분포 <span class="hint">점 크기 = 클릭수 · 오른쪽 아래(비용↑ CPC↓)가 효자 키워드</span></h2></div>
+    <div class="ph"><h2>비용 vs CPC 분포 <span class="hint">${scatterHint}</span></h2></div>
     <div class="chartbox tall"><canvas id="kwScatter"></canvas></div>
   </div>
 
@@ -1402,7 +1454,7 @@ function renderKw(){
   wireMtdSortSeg();
   const si=document.getElementById('kwSearch');
   si.oninput=e=>{kwQuery=e.target.value;renderKwTable();};
-  renderKwTable(); renderKwScatter(rows);
+  renderKwTable(); renderKwScatter(scatterRows);
 }
 function kwCard(k,cls){
   const c=cls==='good'?'--pc':'--critical';
