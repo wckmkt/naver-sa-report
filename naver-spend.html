@@ -195,7 +195,7 @@ code{background:color-mix(in srgb,var(--ink) 7%,transparent);padding:1px 6px;bor
 
   <div class="nav" id="nav">
     <button data-v="spend" class="on">소진현황</button>
-    <button data-v="sim">효율 시뮬레이터</button>
+    <button data-v="sim" style="display:none">효율 시뮬레이터</button>
     <button data-v="kw">키워드</button>
   </div>
 
@@ -495,11 +495,11 @@ function kwMtdBackupRows(){
 }
 function exportKwCSV(){
   const abLabel=ABM?`·${ABM.since}~${ABM.until}`:'·MTD 데이터 없음';
-  const rows=[['계정','키워드','입찰가','노출','클릭','비용','CTR(%)','CPC','평균순위',
+  const rows=[['클릭순위','계정','키워드','입찰가','노출','클릭','비용','CTR(%)','CPC','평균순위',
                `전환(에어브릿지${abLabel})`,`매출(에어브릿지${abLabel})`,'전환수(네이버·참고)','전환매출(네이버·참고)']];
-  kwMtdBackupRows().forEach(k=>{
+  kwMtdBackupRows().sort((a,b)=>b.clk-a.clk).forEach((k,i)=>{
     const ab=airbridgeMtdTermMap()[k.kw];
-    rows.push([k.acct,k.kw,k.bid,k.imp,k.clk,k.cost,
+    rows.push([i+1,k.acct,k.kw,k.bid,k.imp,k.clk,k.cost,
       (k.imp?k.clk/k.imp*100:0).toFixed(2),Math.round(k.clk?k.cost/k.clk:0),k.rnk,
       ab?ab.ord:0,ab?ab.rev:0,k.conv,k.convAmt]);
   });
