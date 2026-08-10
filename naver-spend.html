@@ -537,19 +537,20 @@ function exportKwYesterdayLyCSV(){
 }
 function exportKwMtdCSV(){
   if(!KWM) return;
-  const rows=[['클릭순위','구분','계정','키워드','노출','클릭','비용','CTR(%)','CPC','평균순위']];
+  const ymd=d=>d?`${d.slice(0,4)}/${+d.slice(5,7)}/${+d.slice(8,10)}`:'';
+  const rows=[['구분','클릭순위','키워드','노출','클릭','비용','CTR(%)','CPC','평균순위']];
   const push=(field,label,cols)=>{
     const mix={}; cols.forEach((c,i)=>mix[c]=i);
     const group=[];
-    (KWM.accounts||[]).forEach(a=>(a[field]||[]).forEach(r=>group.push({acct:a.name,r})));
-    group.sort((x,y)=>y.r[mix.clk]-x.r[mix.clk]).forEach(({acct,r},i)=>{
+    (KWM.accounts||[]).forEach(a=>(a[field]||[]).forEach(r=>group.push(r)));
+    group.sort((x,y)=>y[mix.clk]-x[mix.clk]).forEach((r,i)=>{
       const imp=r[mix.imp], clk=r[mix.clk], cost=r[mix.cost];
-      rows.push([i+1,label,acct,r[mix.kw],imp,clk,cost,(imp?clk/imp*100:0).toFixed(2),
+      rows.push([label,i+1,r[mix.kw],imp,clk,cost,(imp?clk/imp*100:0).toFixed(2),
         clk?Math.round(cost/clk):0, mix.rnk!=null?r[mix.rnk]:'']);
     });
   };
-  push('curTop',`이번달(${KWM.period.since}~${KWM.period.until})`,KWM.cols);
-  push('lyTop',`작년동기간(${KWM.ly.since}~${KWM.ly.until})`,KWM.lyCols);
+  push('curTop',`이번달(${ymd(KWM.period.since)}-${ymd(KWM.period.until)})`,KWM.cols);
+  push('lyTop',`작년동기간(${ymd(KWM.ly.since)}-${ymd(KWM.ly.until)})`,KWM.lyCols);
   downloadCSV(`naver_키워드_MTD비교_${KWM.period.since}_${KWM.period.until}.csv`,rows);
 }
 
