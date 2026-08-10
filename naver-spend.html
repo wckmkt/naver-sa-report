@@ -197,6 +197,7 @@ code{background:color-mix(in srgb,var(--ink) 7%,transparent);padding:1px 6px;bor
     <button data-v="spend" class="on">소진현황</button>
     <button data-v="sim" style="display:none">효율 시뮬레이터</button>
     <button data-v="kw">키워드</button>
+    <button data-v="cpc">CPC 비교</button>
   </div>
 
   <div class="ctl" id="ctlBar">
@@ -347,6 +348,11 @@ code{background:color-mix(in srgb,var(--ink) 7%,transparent);padding:1px 6px;bor
   <div id="kwBody"></div>
 </div>
 
+<!-- ══════════════ CPC 비교 ══════════════ -->
+<div class="view" id="v-cpc">
+  <div id="cpcBody"></div>
+</div>
+
 </div>
 
 <script>
@@ -387,6 +393,7 @@ const int=n=>(n==null?'—':Math.round(n).toLocaleString('ko-KR'));
 const cvar=k=>getComputedStyle(document.documentElement).getPropertyValue(k).trim();
 const fmtCyc=c=>c?`${c.slice(8,10)}:${c.slice(10,12)}`:'—';
 const md=d=>d?`${+d.slice(5,7)}/${+d.slice(8,10)}`:'—';
+const ymd=d=>d?`${d.slice(0,4)}/${+d.slice(5,7)}/${+d.slice(8,10)}`:'';
 function kindTag(k){return `<span class="tag tag-${k==='SA'?'sa':k==='SS'?'ss':'etc'}">${KL[k]||k}</span>`;}
 function devTag(d){return `<span class="tag tag-${d==='PC'?'pc':d==='MO'?'mo':'etc'}">${DL[d]||d}</span>`;}
 
@@ -404,7 +411,7 @@ const LMEND=shiftDay(MSTART,-1), LMSTART=LMEND.slice(0,8)+'01';
 
 // ── 상태 ────────────────────────────────────────────────────────────────
 let view='spend';
-let scope='ALL', kind='ALL', device='ALL', trendBy='device', acctBy='device', mtdSort='clk';
+let scope='ALL', kind='ALL', device='ALL', trendBy='device', acctBy='device', mtdSort='clk', cpcTopN=50;
 let sortKey='spend', sortDir=-1;
 let tblQuery='', tblStatus='all';
 let hourMetric='spend', hourBy='all';
@@ -537,7 +544,6 @@ function exportKwYesterdayLyCSV(){
 }
 function exportKwMtdCSV(){
   if(!KWM) return;
-  const ymd=d=>d?`${d.slice(0,4)}/${+d.slice(5,7)}/${+d.slice(8,10)}`:'';
   const rows=[['구분','클릭순위','키워드','노출','클릭','비용','CTR(%)','CPC','평균순위']];
   const push=(field,label,cols)=>{
     const mix={}; cols.forEach((c,i)=>mix[c]=i);
@@ -552,6 +558,91 @@ function exportKwMtdCSV(){
   push('curTop',`이번달(${ymd(KWM.period.since)}-${ymd(KWM.period.until)})`,KWM.cols);
   push('lyTop',`작년동기간(${ymd(KWM.ly.since)}-${ymd(KWM.ly.until)})`,KWM.lyCols);
   downloadCSV(`naver_키워드_MTD비교_${KWM.period.since}_${KWM.period.until}.csv`,rows);
+}
+
+// ── CPC 비교(이번달 vs 작년동기간) ─────────────────────────────────────────
+// KWM(curTop/lyTop)을 계정+키워드로 집계 후 각자 클릭수 내림차순으로 순위를 매긴다.
+// field별로 독립 랭킹(이번달 순위·작년동기간 순위는 서로 다른 모집단 기준).
+function kwMtdRankedRows(field){
+  if(!KWM) return [];
+  const MC=KWM.cols||['kw','imp','clk','cost','rnk'], mix={}; MC.forEach((c,i)=>mix[c]=i);
+  const agg={};
+  (KWM.accounts||[]).forEach(a=>{ if(scope!=='ALL'&&a.name!==scope) return;
+    (a[field]||[]).forEach(r=>{
+      const kw=r[mix.kw]; if(BRAND_KW_RE.test(kw)) return;
+      const o=agg[kw]||(agg[kw]={kw,imp:0,clk:0,cost:0});
+      o.imp+=r[mix.imp]; o.clk+=r[mix.clk]; o.cost+=r[mix.cost];
+    });});
+  const out=Object.values(agg).map(o=>({...o,cpc:o.clk?o.cost/o.clk:0}));
+  out.sort((a,b)=>b.clk-a.clk);
+  out.forEach((o,i)=>o.rank=i+1);
+  return out;
+}
+function cpcCompareRows(topN){
+  const cur=kwMtdRankedRows('curTop'), ly=kwMtdRankedRows('lyTop');
+  const lyMap={}; ly.forEach(o=>lyMap[o.kw]=o);
+  return cur.slice(0,topN).map(c=>{
+    const l=lyMap[c.kw];
+    const dCpc=l?c.cpc-l.cpc:null;
+    const pct=(l&&l.cpc)?dCpc/l.cpc*100:null;
+    return {rank:c.rank,kw:c.kw,curCpc:c.cpc,lyCpc:l?l.cpc:null,dCpc,pct,lyRank:l?l.rank:null};
+  });
+}
+function cpcPeriodHint(){
+  if(!KWM) return '';
+  return `이번달(${ymd(KWM.period.since)}-${ymd(KWM.period.until)}) vs `
+    +`작년동기간(${ymd(KWM.ly.since)}-${ymd(KWM.ly.until)}) · 순위는 이번달 클릭순위 기준 · 브랜드 키워드 제외`;
+}
+function renderCpcCompare(){
+  const body=document.getElementById('cpcBody');
+  if(!KWM){
+    body.innerHTML=`<div class="panel"><div class="empty">MTD 데이터가 없습니다.<br>
+      터미널에서 <code>python naver_kw_mtd.py</code> 를 실행하세요.</div></div>`;
+    return;
+  }
+  const rows=cpcCompareRows(cpcTopN);
+  const withData=rows.filter(r=>r.pct!=null);
+  const avgPct=withData.length?withData.reduce((s,r)=>s+r.pct,0)/withData.length:0;
+  const pctCell=v=>v==null?'<td class="num ref">-</td>'
+    :`<td class="num" style="color:${v>0?'var(--critical)':v<0?'var(--pc)':'var(--muted)'}">${v>0?'+':''}${v.toFixed(1)}%</td>`;
+  const wonCell=v=>v==null?'<td class="num ref">데이터없음</td>':`<td class="num">${won(Math.round(v))}</td>`;
+  const dCell=v=>v==null?'<td class="num ref">데이터없음</td>'
+    :`<td class="num" style="color:${v>0?'var(--critical)':v<0?'var(--pc)':'var(--muted)'}">${v>0?'+':''}${won(Math.round(v))}</td>`;
+  const rowsHtml=rows.map(r=>`<tr>
+    <td class="l">${r.rank}</td><td class="l kwcell" title="${r.kw}">${r.kw}</td>
+    ${wonCell(r.curCpc)}${wonCell(r.lyCpc)}${dCell(r.dCpc)}${pctCell(r.pct)}
+    <td class="num ref">${r.lyRank!=null?r.lyRank:'-'}</td>
+  </tr>`).join('')||'<tr><td colspan="7" class="empty">데이터 없음</td></tr>';
+
+  body.innerHTML=`
+  <div class="ph" style="margin-top:16px"><h2 style="font-size:14px">CPC 비교 <span class="hint">${cpcPeriodHint()}</span></h2>
+    <div class="grp"><span class="lbl">TOP</span><div class="seg" id="cpcTopNSeg"></div></div></div>
+  <div class="tiles">
+    <div class="tile"><div class="lab">TOP${cpcTopN} 키워드</div><div class="val">${rows.length}</div></div>
+    <div class="tile"><div class="lab">평균 CPC 변화율</div>
+      <div class="val" style="color:${avgPct>0?'var(--critical)':avgPct<0?'var(--pc)':'var(--ink)'}">${avgPct>0?'+':''}${avgPct.toFixed(1)}%</div>
+      <div class="sub">데이터 있는 ${withData.length}개 키워드 단순평균</div></div>
+  </div>
+  <div class="panel">
+    <div class="tblwrap"><table class="fixedcol">
+      <colgroup><col style="width:48px"><col style="width:140px"><col style="width:90px"><col style="width:100px">
+        <col style="width:90px"><col style="width:100px"><col style="width:110px"></colgroup>
+      <thead><tr>
+        <th class="l">순위</th><th class="l">키워드</th><th>당월 CPC</th><th>작년동기간 CPC</th>
+        <th>CPC 변화</th><th>CPC 변화율(%)</th><th>작년동기간 클릭순위</th>
+      </tr></thead><tbody>${rowsHtml}</tbody></table></div>
+  </div>`;
+  seg('cpcTopNSeg',[[10,'10'],[30,'30'],[50,'50'],[100,'100']],cpcTopN,v=>{cpcTopN=+v;renderCpcCompare();},{});
+}
+function exportCpcCompareCSV(){
+  if(!KWM) return;
+  const rows=[['순위','키워드','당월 CPC','작년동기간 CPC','CPC 변화','CPC 변화율(%)','작년동기간 클릭순위']];
+  cpcCompareRows(cpcTopN).forEach(r=>rows.push([r.rank,r.kw,Math.round(r.curCpc),
+    r.lyCpc!=null?Math.round(r.lyCpc):'데이터없음',
+    r.dCpc!=null?Math.round(r.dCpc):'데이터없음',
+    r.pct!=null?r.pct.toFixed(1):'-',
+    r.lyRank!=null?r.lyRank:'-']));
+  downloadCSV(`naver_키워드_CPC비교_TOP${cpcTopN}_${KWM.period.since}_${KWM.period.until}.csv`,rows);
 }
 
 // ── 헤더 / 컨트롤 ───────────────────────────────────────────────────────
@@ -585,7 +676,7 @@ function renderHeader(){
   seg('hourBySeg',[['all','전체'],['device','기기'],['kind','유형']],hourBy,v=>{hourBy=v;renderHourly();},{});
   seg('hourMetricSeg',[['spend','소진액'],['imp','노출'],['clk','클릭']],hourMetric,v=>{hourMetric=v;renderHourly();},{});
   const bl=document.getElementById('baseLbl'); if(bl) bl.textContent=D.hourlyBaseLabel||'기준선';
-  document.getElementById('perBar').classList.toggle('dim',view==='kw');
+  document.getElementById('perBar').classList.toggle('dim',view==='kw'||view==='cpc');
 }
 function seg(id,opts,cur,on,cmap){
   const el=document.getElementById(id); if(!el)return;
@@ -1560,6 +1651,7 @@ function renderAll(){
   document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===view));
   if(view==='spend'){renderTiles();renderAcctBar();renderTrend();renderHourly();renderTable();}
   else if(view==='sim'){renderSim();}
+  else if(view==='cpc'){renderCpcCompare();}
   else {renderKw();}
 }
 document.getElementById('nav').onclick=e=>{const b=e.target.closest('button'); if(!b)return;
@@ -1572,6 +1664,7 @@ document.getElementById('themeBtn').onclick=()=>{
   renderAll();
 };
 document.getElementById('csvBtn').onclick=()=>{ if(view==='kw'){ if(KW)exportKwCSV(); else alert('키워드 데이터가 없습니다. python naver_kw_collect.py 실행 후 이용하세요.'); }
+  else if(view==='cpc'){ if(KWM)exportCpcCompareCSV(); else alert('MTD 데이터가 없습니다. python naver_kw_mtd.py 실행 후 이용하세요.'); }
   else exportSpendCSV(); };
 document.getElementById('dFrom').onchange=e=>{pFrom=e.target.value||pFrom;preset='custom';renderAll();};
 document.getElementById('dTo').onchange=e=>{pTo=e.target.value||pTo;preset='custom';renderAll();};
