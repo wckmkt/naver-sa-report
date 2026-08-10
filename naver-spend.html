@@ -537,14 +537,16 @@ function exportKwYesterdayLyCSV(){
 }
 function exportKwMtdCSV(){
   if(!KWM) return;
-  const rows=[['구분','계정','키워드','노출','클릭','비용','CTR(%)','CPC','평균순위']];
+  const rows=[['클릭순위','구분','계정','키워드','노출','클릭','비용','CTR(%)','CPC','평균순위']];
   const push=(field,label,cols)=>{
     const mix={}; cols.forEach((c,i)=>mix[c]=i);
-    (KWM.accounts||[]).forEach(a=>(a[field]||[]).forEach(r=>{
+    const group=[];
+    (KWM.accounts||[]).forEach(a=>(a[field]||[]).forEach(r=>group.push({acct:a.name,r})));
+    group.sort((x,y)=>y.r[mix.clk]-x.r[mix.clk]).forEach(({acct,r},i)=>{
       const imp=r[mix.imp], clk=r[mix.clk], cost=r[mix.cost];
-      rows.push([label,a.name,r[mix.kw],imp,clk,cost,(imp?clk/imp*100:0).toFixed(2),
+      rows.push([i+1,label,acct,r[mix.kw],imp,clk,cost,(imp?clk/imp*100:0).toFixed(2),
         clk?Math.round(cost/clk):0, mix.rnk!=null?r[mix.rnk]:'']);
-    }));
+    });
   };
   push('curTop',`이번달(${KWM.period.since}~${KWM.period.until})`,KWM.cols);
   push('lyTop',`작년동기간(${KWM.ly.since}~${KWM.ly.until})`,KWM.lyCols);
