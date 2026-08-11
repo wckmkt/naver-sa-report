@@ -1434,6 +1434,7 @@ function bidOppHTML(){
         <th>CPC<span class="ref" title="VAT 제외 — 입찰가와 같은 단위">·VAT제외</span></th>
         <th>평균순위<span class="ref" title="네이버 API avgRnk — 어제 하루 평균">·API</span></th>
         <th>실측 PC</th><th>실측 MO</th>
+        <th>현재입찰가<span class="ref" title="현재 등록된 입찰가(VAT 별도). 1위 입찰가보다 높으면 빨갛게 표시 — 1위를 사고도 남을 값을 걸어둔 상태입니다(차순위 과금 덕에 실제로는 덜 내지만, 경쟁사가 올리면 그대로 따라 올라갑니다)">·현재</span></th>
         <th>1위가</th><th>2위가</th><th>3위가</th>
         <th>ROAS</th><th>${tgt}위 CPC</th><th>절감/일</th><th class="l">판단</th>
         <th class="l">상위 경쟁사<span class="ref" title="자사를 제외한 상위 2개 · 앞의 숫자가 그 광고주의 실제 노출순위입니다(자사가 1위라는 뜻이 아님)">·실측순위</span></th>
@@ -1453,6 +1454,7 @@ function bidOppHTML(){
         return `<tr><td class="l" title="${r.kw}">${r.kw}</td><td>${DL[r.device]||r.device}</td>
           <td>${int(r.clk)}</td><td>${krw(r.cost)}</td><td>${won(r.cpc)}</td><td>${r.rnk||'—'}</td>
           <td>${rankBadge(sPC)}</td><td>${rankBadge(sMO)}</td>
+          <td${r.bid&&r.bids[0]&&r.bid>r.bids[0]?' style="color:var(--critical);font-weight:700" title="1위 입찰가보다 높습니다"':''}>${r.bid?won(r.bid):'—'}</td>
           <td>${won(r.bids[0])}</td><td>${won(r.bids[1])}</td><td>${won(r.bids[2])}</td>
           <td style="color:${roasC};font-weight:600">${int(r.roas)}%</td>
           <td>${r.newCpc?won(r.newCpc):'—'}</td><td>${tag}</td><td class="l">${act}</td>
@@ -1480,7 +1482,7 @@ function bidOppHTML(){
 }
 function exportBidOppCSV(){
   const P=BE.positions, ours=new Set((SERP&&SERP.ours)||[]);
-  const rows=[['키워드','기기','계정','클릭','비용(VAT제외)','총비용(VAT포함)','CPC(VAT제외)','평균순위(API)','실측순위PC','실측순위MO',
+  const rows=[['키워드','기기','계정','클릭','비용(VAT제외)','총비용(VAT포함)','CPC(VAT제외)','평균순위(API)','실측순위PC','실측순위MO','현재입찰가',
     ...P.map(p=>`${p}위입찰가`),'최소노출','중간','AB주문','AB매출','ROAS(%)',
     `${BE.target}위예상CPC`,'절감률(%)','예상절감(원/일)','판단','PC경쟁사','MO경쟁사']];
   // 순위를 붙여서 내보낸다 — 자사가 늘 1위가 아니라 이름만으로는 몇 위인지 알 수 없다.
@@ -1490,7 +1492,7 @@ function exportBidOppCSV(){
   bidOppRows().forEach(r=>{
     const sPC=serpFind(r.kw,'PC'), sMO=serpFind(r.kw,'MO');
     const rk=s=>s?(s.rank||'미노출'):'';
-    rows.push([r.kw,DL[r.device]||r.device,r.acct,r.clk,r.cost,r.costVat,r.cpc,r.rnk,rk(sPC),rk(sMO),
+    rows.push([r.kw,DL[r.device]||r.device,r.acct,r.clk,r.cost,r.costVat,r.cpc,r.rnk,rk(sPC),rk(sMO),r.bid,
       ...r.bids,r.minBid,r.medBid,r.abOrders,r.abRev,r.roas,r.newCpc,r.saveRate,r.save,
       bidAction(r).label,other(sPC),other(sMO)]);
   });
