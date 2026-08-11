@@ -1376,6 +1376,7 @@ function bidOppHTML(){
   const rows=bidOppRows(), tgt=BE.target;
   const movable=rows.filter(r=>r.save>0);
   const totCost=rows.reduce((a,r)=>a+r.cost,0), totSave=rows.reduce((a,r)=>a+r.save,0);
+  const totVat=rows.reduce((a,r)=>a+(r.costVat||0),0);   // 관리시스템 총비용과 대조용
   const down=rows.filter(r=>bidAction(r).k==='down'), downSave=down.reduce((a,r)=>a+r.save,0);
   // 경쟁사 빈도 — 현재 필터에 걸린 키워드들의 지면에서만 집계
   const cnt={}; const ours=new Set((SERP&&SERP.ours)||[]);
@@ -1395,8 +1396,9 @@ function bidOppHTML(){
     </div>
   </div>
   <div class="tiles">
-    <div class="tile"><div class="lab">대상 키워드 비용 <span style="font-weight:500;color:var(--muted)">어제</span></div>
-      <div class="val">${krw(totCost)}</div><div class="sub">키워드×기기 ${int(rows.length)}건</div></div>
+    <div class="tile"><div class="lab">대상 키워드 비용 <span style="font-weight:500;color:var(--muted)">어제 · VAT 제외</span></div>
+      <div class="val">${krw(totCost)}</div>
+      <div class="sub">키워드×기기 ${int(rows.length)}건 · 총비용(VAT포함) ${krw(totVat)}</div></div>
     <div class="tile"><div class="lab">${tgt}순위 하향 대상</div><div class="val">${int(movable.length)}</div>
       <div class="sub">브랜드 방어·이미 ${tgt}순위 이하는 제외</div></div>
     <div class="tile"><div class="lab">예상 절감 <span style="font-weight:500;color:var(--muted)">/일 · 전체</span></div>
@@ -1427,7 +1429,9 @@ function bidOppHTML(){
       <b>판단</b> 컬럼을 먼저 보세요(절감액 큰 순 ≠ 내려도 되는 순) · ROAS는 에어브릿지 어제 기준</span></h2></div>
     <div class="tblwrap"><table>
       <thead><tr>
-        <th class="l">키워드</th><th>기기</th><th>클릭</th><th>비용</th><th>CPC</th>
+        <th class="l">키워드</th><th>기기</th><th>클릭</th>
+        <th>비용<span class="ref" title="VAT 제외. 관리시스템 '총비용'은 VAT 포함이라 이 값의 1.1배입니다">·VAT제외</span></th>
+        <th>CPC<span class="ref" title="VAT 제외 — 입찰가와 같은 단위">·VAT제외</span></th>
         <th>평균순위<span class="ref" title="네이버 API avgRnk — 어제 하루 평균">·API</span></th>
         <th>실측 PC</th><th>실측 MO</th>
         <th>1위가</th><th>2위가</th><th>3위가</th>
@@ -1455,12 +1459,17 @@ function bidOppHTML(){
           <td class="l" style="color:var(--muted)">${comp}</td></tr>`;
       }).join('')}</tbody></table></div>
     <div class="foot">
+      <b>이 패널의 비용·CPC·절감액은 모두 VAT 제외</b>입니다. 네이버 API의 총비용(=관리시스템 '총비용',
+      비즈머니 차감액)은 VAT 포함인데 <b>입찰가는 VAT 별도</b>라, 그대로 빼면 단위가 섞여 절감액이
+      과대계상됩니다 — 비용을 1.1로 나눠 입찰가와 단위를 맞췄습니다.
+      관리시스템 숫자와 대조하실 땐 CSV의 <b>총비용(VAT포함)</b> 컬럼을 보세요.<br>
       <b>절감액 산식</b> (현재 CPC − ${tgt+1}순위 입찰가) × 어제 클릭수.
-      네이버는 차순위+10원 과금이라 실제 CPC는 1위 입찰가의 41%(중앙값)에 불과합니다 —
+      네이버는 차순위+10원 과금이라 실제 CPC는 1위 입찰가의 38%(중앙값)에 불과합니다 —
       입찰가 차이를 그대로 절감액으로 쓰면 크게 과대계상됩니다.
-      현재 1위 키워드 34개로 검증한 결과 <b>차순위 입찰가</b>가 실제 CPC를 중앙절대오차 26%로 맞췄습니다
-      (1위 입찰가 기준은 147%로 빗나감).<br>
-      <b style="color:var(--critical)">한계</b> ①CPC 예측오차 ±26% ②순위가 내려가면 클릭도 줄지만 그건 미반영 —
+      현재 1위 키워드 34개로 검증한 결과 <b>차순위 입찰가</b>가 실제 CPC를 중앙절대오차 33%로 맞췄습니다
+      (1위 입찰가 기준은 171%로 빗나감).<br>
+      <b style="color:var(--critical)">한계</b> ①CPC 예측오차 ±33%이고 예측이 실제보다 25% 높게 나오는 편향이 있습니다
+      ②순위가 내려가면 클릭도 줄지만 그건 미반영 —
       <b>이 값은 상한</b>입니다. ③실측순위는 수집 시점 스냅샷이며 시간대별로 바뀝니다.
       ④PC는 최대 10개·모바일은 5개 노출이라 기기 간 순위를 직접 비교하면 안 됩니다.<br>
       ⑤<b>판단</b>은 ROAS 기준입니다(800%↑ 유지·증액 / 200%↓ 하향 / 그 사이 검토).
@@ -1471,7 +1480,7 @@ function bidOppHTML(){
 }
 function exportBidOppCSV(){
   const P=BE.positions, ours=new Set((SERP&&SERP.ours)||[]);
-  const rows=[['키워드','기기','계정','클릭','비용','CPC','평균순위(API)','실측순위PC','실측순위MO',
+  const rows=[['키워드','기기','계정','클릭','비용(VAT제외)','총비용(VAT포함)','CPC(VAT제외)','평균순위(API)','실측순위PC','실측순위MO',
     ...P.map(p=>`${p}위입찰가`),'최소노출','중간','AB주문','AB매출','ROAS(%)',
     `${BE.target}위예상CPC`,'절감률(%)','예상절감(원/일)','판단','PC경쟁사','MO경쟁사']];
   // 순위를 붙여서 내보낸다 — 자사가 늘 1위가 아니라 이름만으로는 몇 위인지 알 수 없다.
@@ -1481,7 +1490,7 @@ function exportBidOppCSV(){
   bidOppRows().forEach(r=>{
     const sPC=serpFind(r.kw,'PC'), sMO=serpFind(r.kw,'MO');
     const rk=s=>s?(s.rank||'미노출'):'';
-    rows.push([r.kw,DL[r.device]||r.device,r.acct,r.clk,r.cost,r.cpc,r.rnk,rk(sPC),rk(sMO),
+    rows.push([r.kw,DL[r.device]||r.device,r.acct,r.clk,r.cost,r.costVat,r.cpc,r.rnk,rk(sPC),rk(sMO),
       ...r.bids,r.minBid,r.medBid,r.abOrders,r.abRev,r.roas,r.newCpc,r.saveRate,r.save,
       bidAction(r).label,other(sPC),other(sMO)]);
   });
