@@ -366,7 +366,9 @@ code{background:color-mix(in srgb,var(--ink) 7%,transparent);padding:1px 6px;bor
     ['naver_kw_daily_data.js', 'window.__kwdMissing=1'],
     ['naver_kw_mtd_data.js', 'window.__kwmMissing=1'],
     ['airbridge_conv_data.js', 'window.__abMissing=1'],
-    ['airbridge_conv_mtd_data.js', 'window.__abmMissing=1']];
+    ['airbridge_conv_mtd_data.js', 'window.__abmMissing=1'],
+    ['naver_kw_bidest_data.js', 'window.__beMissing=1'],
+    ['naver_serp_data.js', 'window.__serpMissing=1']];
   files.forEach(function(f){
     var src = Array.isArray(f) ? f[0] : f, onerr = Array.isArray(f) ? f[1] : '';
     document.write('<script src="' + src + '?v=' + v + '"' +
@@ -381,6 +383,8 @@ const KWD = window.NAVER_KW_DAILY || null;
 const KWM = window.NAVER_KW_MTD || null;
 const AB = window.AIRBRIDGE_CONV || null;
 const ABM = window.AIRBRIDGE_CONV_MTD || null;
+const BE = window.NAVER_KW_BIDEST || null;   // 순위별 입찰가·절감액 (naver_kw_bid_estimate.py)
+const SERP = window.NAVER_SERP || null;      // 파워링크 실측순위·경쟁사 (naver_serp_rank.py)
 if(!D){ document.body.innerHTML='<div class="wrap"><h1>데이터 없음</h1><p>naver_spend_collect.py를 먼저 실행하세요.</p></div>'; }
 
 const KL=(D&&D.kinds)||{SA:'파워링크',SS:'쇼핑검색',ETC:'기타'};
@@ -1316,6 +1320,193 @@ function kwDailyHTML(){
   </div>`;
 }
 
+// ══════════════ 입찰 최적화 (순위별 입찰가 + 파워링크 실측순위) ══════════════
+// 세 소스를 키워드 단위로 합친다:
+//   BE   naver_kw_bid_estimate.py — 순위별 예상 입찰가 → 목표순위 하향 시 절감액
+//   SERP naver_serp_rank.py       — 파워링크 실제 노출순위·경쟁사(PC/MO)
+//   AB   에어브릿지 검색어 매칭     — 주문·매출·ROAS (네이버 전환태그는 PC 편중이라 미사용)
+// 절감액은 상한이다 — CPC 예측 중앙절대오차 26%, 순위 하락에 따른 클릭 감소는 미반영.
+function serpFind(kw,dev){
+  if(!SERP) return null;
+  return SERP.rows.find(r=>r.kw===kw&&r.dev===dev&&r.err===null)||null;
+}
+function rankBadge(s){
+  if(!s||!s.ads.length) return '<span style="color:var(--muted)">—</span>';
+  if(!s.rank) return '<span class="tag tag-etc">미노출</span>';
+  const c=s.rank===1?'var(--critical)':(s.rank<=3?'var(--ink)':'var(--pc)');
+  return `<b style="color:${c}">${s.rank}</b><span style="color:var(--muted)">/${s.ads.length}</span>`;
+}
+// 절감액만으로 정렬하면 ROAS 2,800% 키워드가 상위에 온다 — 돈은 아끼지만 매출을 더 잃는다.
+// 절감액(얼마 아끼나)과 판단(내려도 되나)은 분리해서 본다.
+function bidAction(r){
+  if(r.brand) return {k:'brand',label:'방어(브랜드)',cls:'tag-etc'};
+  if(r.save<=0) return {k:'none',label:'해당없음',cls:'tag-etc'};
+  if(r.roas>=800) return {k:'keep',label:'유지·증액',cls:'tag-good'};
+  if(r.roas<200) return {k:'down',label:'하향',cls:'tag-bad'};
+  return {k:'review',label:'검토',cls:'tag-etc'};
+}
+// 같은 지면에 자사 광고가 두 번 이상 뜨는 경우 — 계정이 5개라 서로 다른 계정이 같은
+// 키워드에 입찰하면 자기끼리 경쟁해 CPC를 올린다(실측 2026-08-11: 9개 지면).
+// our_rank()는 첫(최상위) 노출만 반환하므로 이 중복은 순위 컬럼만 봐서는 안 보인다.
+function serpDupes(){
+  if(!SERP) return [];
+  const ours=new Set(SERP.ours);
+  const out=[];
+  SERP.rows.filter(r=>r.err===null&&r.ads.length)
+    .filter(r=>device==='ALL'||r.dev===device)
+    .forEach(r=>{
+      const hits=r.ads.map((n,i)=>i+1).filter(i=>ours.has(r.ads[i-1].replace(/\s/g,'').toLowerCase()));
+      if(hits.length>1) out.push({kw:r.kw,dev:r.dev,ranks:hits,n:r.ads.length});
+    });
+  return out;
+}
+function bidOppRows(){
+  if(!BE) return [];
+  return BE.rows.filter(r=>{
+    if(scope!=='ALL'&&r.acct!==scope) return false;
+    if(device!=='ALL'&&r.device!==device) return false;
+    return true;
+  }).sort((a,b)=>b.save-a.save);
+}
+function bidOppHTML(){
+  if(!BE) return `<div class="alert info" style="margin-top:16px">
+    ℹ️ <b>입찰 최적화</b> 패널을 보려면 <code>python naver_kw_bid_estimate.py</code> 를 실행하세요
+    (TOP50 키워드의 순위별 예상 입찰가 · 계정당 수 초).
+    경쟁사까지 보려면 <code>python naver_serp_rank.py</code> 도 함께 실행하세요.</div>`;
+  const rows=bidOppRows(), tgt=BE.target;
+  const movable=rows.filter(r=>r.save>0);
+  const totCost=rows.reduce((a,r)=>a+r.cost,0), totSave=rows.reduce((a,r)=>a+r.save,0);
+  const down=rows.filter(r=>bidAction(r).k==='down'), downSave=down.reduce((a,r)=>a+r.save,0);
+  // 경쟁사 빈도 — 현재 필터에 걸린 키워드들의 지면에서만 집계
+  const cnt={}; const ours=new Set((SERP&&SERP.ours)||[]);
+  if(SERP) rows.forEach(r=>{ const s=serpFind(r.kw,r.device); if(!s) return;
+    s.ads.forEach(n=>{ if(!ours.has(n.replace(/\s/g,'').toLowerCase())) cnt[n]=(cnt[n]||0)+1; }); });
+  const comps=Object.entries(cnt).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const serpNote=SERP
+    ? `실측순위 수집 ${SERP.generated} <span class="ref" title="파워링크 순위는 시간대별로 바뀝니다 — 이 값은 수집 시점 스냅샷입니다">·스냅샷</span>`
+    : `<span style="color:var(--muted)">실측순위·경쟁사 없음 — <code>python naver_serp_rank.py</code></span>`;
+  return `
+  <div class="alert info" style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+    <div>🎯 <b>입찰 최적화 — ${tgt}순위 하향 시뮬레이션</b> · 대상일 ${md(BE.day)} · 수집 ${BE.generated}<br>
+      <span style="font-size:12px;color:var(--muted)">${serpNote}</span></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="ghost" onclick="exportBidOppCSV()">⬇ 입찰 최적화 CSV</button>
+      ${SERP?'<button class="ghost" onclick="exportSerpCSV()">⬇ 파워링크 경쟁사 CSV</button>':''}
+    </div>
+  </div>
+  <div class="tiles">
+    <div class="tile"><div class="lab">대상 키워드 비용 <span style="font-weight:500;color:var(--muted)">어제</span></div>
+      <div class="val">${krw(totCost)}</div><div class="sub">키워드×기기 ${int(rows.length)}건</div></div>
+    <div class="tile"><div class="lab">${tgt}순위 하향 대상</div><div class="val">${int(movable.length)}</div>
+      <div class="sub">브랜드 방어·이미 ${tgt}순위 이하는 제외</div></div>
+    <div class="tile"><div class="lab">예상 절감 <span style="font-weight:500;color:var(--muted)">/일 · 전체</span></div>
+      <div class="val" style="color:var(--pc)">${krw(totSave)}</div>
+      <div class="sub">비용 대비 ${totCost?(totSave/totCost*100).toFixed(1):0}% · 월 ${krw(totSave*30)}</div></div>
+    <div class="tile"><div class="lab">그중 <b>하향</b> 판단만 <span style="font-weight:500;color:var(--muted)">ROAS 200% 미만</span></div>
+      <div class="val" style="color:var(--critical)">${krw(downSave)}</div>
+      <div class="sub">${int(down.length)}건 · 월 ${krw(downSave*30)} — <b>여기부터 실행</b>하고 절감분을 고ROAS로 재투입</div></div>
+  </div>
+  ${(()=>{const dup=serpDupes(); if(!dup.length) return '';
+    return `<div class="alert crit" style="margin-top:12px">
+      ⚠ <b>자사 광고가 같은 지면에 2번 노출 — ${dup.length}건</b> ·
+      계정이 5개라 서로 다른 계정이 같은 키워드에 입찰하면 <b>자기끼리 CPC를 올립니다</b>.
+      순위 컬럼은 최상위 노출만 표시하므로 이 중복은 거기서 안 보입니다.
+      <div class="chiprow" style="margin-top:8px">${dup.map(d=>
+        `<span class="delta bad">${d.kw} <span style="font-weight:500">${DL[d.dev]||d.dev}</span>
+         ${d.ranks.join('위·')}위<span style="font-weight:500;color:var(--muted)">/${d.n}</span></span>`).join('')}</div>
+      <div style="margin-top:8px;font-size:12px;color:var(--muted)">
+        어느 계정인지는 '파워링크 경쟁사 CSV'로 지면을 특정한 뒤 각 계정의 키워드 등록 여부를 확인하세요 —
+        SERP는 광고주명만 주고 계정은 구분하지 못합니다.</div>
+    </div>`;})()}
+  ${comps.length?`<div class="panel tight"><div class="ph"><h2>파워링크에서 마주치는 경쟁사
+    <span class="hint">현재 필터 키워드 기준 · 동시노출 횟수</span></h2></div>
+    <div class="chiprow" style="padding:0 14px 14px">${comps.map(([n,c])=>
+      `<span class="delta flat">${n} <b>${c}</b></span>`).join('')}</div></div>`:''}
+  <div class="panel">
+    <div class="ph"><h2>키워드별 입찰 조정 후보 <span class="hint">예상 절감액순 · 상위 60건 ·
+      <b>판단</b> 컬럼을 먼저 보세요(절감액 큰 순 ≠ 내려도 되는 순) · ROAS는 에어브릿지 어제 기준</span></h2></div>
+    <div class="tblwrap"><table>
+      <thead><tr>
+        <th class="l">키워드</th><th>기기</th><th>클릭</th><th>비용</th><th>CPC</th>
+        <th>평균순위<span class="ref" title="네이버 API avgRnk — 어제 하루 평균">·API</span></th>
+        <th>실측 PC</th><th>실측 MO</th>
+        <th>1위가</th><th>2위가</th><th>3위가</th>
+        <th>ROAS</th><th>${tgt}위 CPC</th><th>절감/일</th><th class="l">판단</th>
+        <th class="l">상위 경쟁사<span class="ref" title="자사를 제외한 상위 2개 · 앞의 숫자가 그 광고주의 실제 노출순위입니다(자사가 1위라는 뜻이 아님)">·실측순위</span></th>
+      </tr></thead><tbody>${rows.slice(0,60).map(r=>{
+        const sPC=serpFind(r.kw,'PC'), sMO=serpFind(r.kw,'MO');
+        const s=r.device==='PC'?sPC:sMO;
+        // 자사가 항상 1위가 아니므로 "2~3위"로 단정하지 않고 각 광고주의 실제 순위를 붙인다.
+        const comp=s&&s.ads.length
+          ? s.ads.map((n,i)=>({n,rank:i+1})).filter(o=>!ours.has(o.n.replace(/\s/g,'').toLowerCase()))
+              .slice(0,2).map(o=>`<span style="color:var(--muted)">${o.rank}위</span> ${o.n}`).join(' · ')||'—'
+          : '—';
+        const roasC=r.roas>=800?'var(--pc)':(r.roas<200?'var(--critical)':'var(--ink)');
+        const tag=r.save>0?`<b style="color:var(--pc)">${krw(r.save)}</b>`:'<span style="color:var(--muted)">—</span>';
+        // 절감액만 보고 정렬하면 ROAS 2,800% 키워드가 상위로 올라온다 — 돈은 아끼지만
+        // 매출을 더 크게 잃는다. 절감액과 별개로 ROAS 기준 판단을 명시한다.
+        const A=bidAction(r), act=`<span class="tag ${A.cls}">${A.label}</span>`;
+        return `<tr><td class="l" title="${r.kw}">${r.kw}</td><td>${DL[r.device]||r.device}</td>
+          <td>${int(r.clk)}</td><td>${krw(r.cost)}</td><td>${won(r.cpc)}</td><td>${r.rnk||'—'}</td>
+          <td>${rankBadge(sPC)}</td><td>${rankBadge(sMO)}</td>
+          <td>${won(r.bids[0])}</td><td>${won(r.bids[1])}</td><td>${won(r.bids[2])}</td>
+          <td style="color:${roasC};font-weight:600">${int(r.roas)}%</td>
+          <td>${r.newCpc?won(r.newCpc):'—'}</td><td>${tag}</td><td class="l">${act}</td>
+          <td class="l" style="color:var(--muted)">${comp}</td></tr>`;
+      }).join('')}</tbody></table></div>
+    <div class="foot">
+      <b>절감액 산식</b> (현재 CPC − ${tgt+1}순위 입찰가) × 어제 클릭수.
+      네이버는 차순위+10원 과금이라 실제 CPC는 1위 입찰가의 41%(중앙값)에 불과합니다 —
+      입찰가 차이를 그대로 절감액으로 쓰면 크게 과대계상됩니다.
+      현재 1위 키워드 34개로 검증한 결과 <b>차순위 입찰가</b>가 실제 CPC를 중앙절대오차 26%로 맞췄습니다
+      (1위 입찰가 기준은 147%로 빗나감).<br>
+      <b style="color:var(--critical)">한계</b> ①CPC 예측오차 ±26% ②순위가 내려가면 클릭도 줄지만 그건 미반영 —
+      <b>이 값은 상한</b>입니다. ③실측순위는 수집 시점 스냅샷이며 시간대별로 바뀝니다.
+      ④PC는 최대 10개·모바일은 5개 노출이라 기기 간 순위를 직접 비교하면 안 됩니다.<br>
+      ⑤<b>판단</b>은 ROAS 기준입니다(800%↑ 유지·증액 / 200%↓ 하향 / 그 사이 검토).
+      ROAS는 <b>어제 하루</b>치라 표본이 작습니다 — 주문 0~1건인 키워드는 며칠 더 보고 결정하세요.<br>
+      실행할 땐 한 번에 전부 바꾸지 말고 <b>10~15개씩 적용 후 재측정</b>하세요 — 그래야 효과를 귀속할 수 있습니다.
+    </div>
+  </div>`;
+}
+function exportBidOppCSV(){
+  const P=BE.positions, ours=new Set((SERP&&SERP.ours)||[]);
+  const rows=[['키워드','기기','계정','클릭','비용','CPC','평균순위(API)','실측순위PC','실측순위MO',
+    ...P.map(p=>`${p}위입찰가`),'최소노출','중간','AB주문','AB매출','ROAS(%)',
+    `${BE.target}위예상CPC`,'절감률(%)','예상절감(원/일)','판단','PC경쟁사','MO경쟁사']];
+  // 순위를 붙여서 내보낸다 — 자사가 늘 1위가 아니라 이름만으로는 몇 위인지 알 수 없다.
+  // 순위별 교차분석이 필요하면 '파워링크 경쟁사 CSV'(롱포맷)를 쓸 것.
+  const other=(s)=>s?s.ads.map((n,i)=>({n,r:i+1})).filter(o=>!ours.has(o.n.replace(/\s/g,'').toLowerCase()))
+    .map(o=>`${o.r}위 ${o.n}`).join(' / '):'';
+  bidOppRows().forEach(r=>{
+    const sPC=serpFind(r.kw,'PC'), sMO=serpFind(r.kw,'MO');
+    const rk=s=>s?(s.rank||'미노출'):'';
+    rows.push([r.kw,DL[r.device]||r.device,r.acct,r.clk,r.cost,r.cpc,r.rnk,rk(sPC),rk(sMO),
+      ...r.bids,r.minBid,r.medBid,r.abOrders,r.abRev,r.roas,r.newCpc,r.saveRate,r.save,
+      bidAction(r).label,other(sPC),other(sMO)]);
+  });
+  downloadCSV(`naver_입찰최적화_${BE.day}.csv`,rows);
+}
+// 경쟁사는 위 표에서 한 셀에 몰려 있어 피벗·필터가 안 된다 — 지면(키워드x기기)의
+// 광고주 한 명당 한 행인 롱포맷으로 따로 내린다. 엑셀에서 광고주별 피벗이 바로 된다.
+function exportSerpCSV(){
+  const ours=new Set(SERP.ours);
+  const rows=[['키워드','기기','노출순위','광고주','구분','자사최상위순위','자사노출수','지면광고수','수집시각']];
+  SERP.rows.filter(r=>r.err===null&&r.ads.length)
+    .filter(r=>device==='ALL'||r.dev===device)
+    .sort((a,b)=>a.kw.localeCompare(b.kw,'ko')||a.dev.localeCompare(b.dev))
+    .forEach(r=>{
+      // 자사가 한 지면에 2번 뜨는 경우가 있어(자기 입찰 경쟁) 노출 횟수를 따로 넣는다.
+      const mineCnt=r.ads.filter(n=>ours.has(n.replace(/\s/g,'').toLowerCase())).length;
+      r.ads.forEach((n,i)=>{
+        const mine=ours.has(n.replace(/\s/g,'').toLowerCase());
+        rows.push([r.kw,DL[r.dev]||r.dev,i+1,n,mine?'자사':'경쟁사',
+          r.rank||'미노출',mineCnt,r.ads.length,SERP.generated]);
+      });
+    });
+  downloadCSV(`naver_파워링크_경쟁사_${SERP.generated.replace(/[: ]/g,'-')}.csv`,rows);
+}
+
 // ══════════════ 키워드 ══════════════
 // 2026-08-04: 기기(PC/모바일) 구분 없이 키워드 텍스트 단위로 합쳐서 보여달라는 요청 —
 // 계정+키워드 단위로 원시행을 합산한 뒤 CTR/CPC 등 비율지표를 합산치에서 재계산한다.
@@ -1506,7 +1697,7 @@ function airbridgeMtdTermMap(){
 }
 function renderKw(){
   const body=document.getElementById('kwBody');
-  const digest=kwDailyHTML();
+  const digest=kwDailyHTML()+bidOppHTML();   // 입찰 최적화 패널은 7일 스냅샷(KW) 없이도 보여야 함
   if(!KW){
     body.innerHTML=digest+`<div class="panel"><div class="empty">
       7일 스냅샷 데이터가 없습니다 (위 '어제 이슈'와 별개).<br>
