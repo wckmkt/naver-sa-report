@@ -585,7 +585,8 @@ function cpcCompareRows(topN){
     const l=lyMap[c.kw];
     const dCpc=l?c.cpc-l.cpc:null;
     const pct=(l&&l.cpc)?dCpc/l.cpc*100:null;
-    return {rank:c.rank,kw:c.kw,curCpc:c.cpc,lyCpc:l?l.cpc:null,dCpc,pct,lyRank:l?l.rank:null};
+    return {rank:c.rank,kw:c.kw,curClk:c.clk,curCpc:c.cpc,lyClk:l?l.clk:null,lyCpc:l?l.cpc:null,
+      dCpc,pct,lyRank:l?l.rank:null};
   });
 }
 function cpcPeriodHint(){
@@ -606,13 +607,14 @@ function renderCpcCompare(){
   const pctCell=v=>v==null?'<td class="num ref">-</td>'
     :`<td class="num" style="color:${v>0?'var(--critical)':v<0?'var(--pc)':'var(--muted)'}">${v>0?'+':''}${v.toFixed(1)}%</td>`;
   const wonCell=v=>v==null?'<td class="num ref">데이터없음</td>':`<td class="num">${won(Math.round(v))}</td>`;
+  const numCell=v=>v==null?'<td class="num ref">데이터없음</td>':`<td class="num">${int(v)}</td>`;
   const dCell=v=>v==null?'<td class="num ref">데이터없음</td>'
     :`<td class="num" style="color:${v>0?'var(--critical)':v<0?'var(--pc)':'var(--muted)'}">${v>0?'+':''}${won(Math.round(v))}</td>`;
   const rowsHtml=rows.map(r=>`<tr>
     <td class="l">${r.rank}</td><td class="l kwcell" title="${r.kw}">${r.kw}</td>
-    ${wonCell(r.curCpc)}${wonCell(r.lyCpc)}${dCell(r.dCpc)}${pctCell(r.pct)}
+    ${numCell(r.curClk)}${wonCell(r.curCpc)}${numCell(r.lyClk)}${wonCell(r.lyCpc)}${dCell(r.dCpc)}${pctCell(r.pct)}
     <td class="num ref">${r.lyRank!=null?r.lyRank:'-'}</td>
-  </tr>`).join('')||'<tr><td colspan="7" class="empty">데이터 없음</td></tr>';
+  </tr>`).join('')||'<tr><td colspan="9" class="empty">데이터 없음</td></tr>';
 
   body.innerHTML=`
   <div class="ph" style="margin-top:16px"><h2 style="font-size:14px">CPC 비교 <span class="hint">${cpcPeriodHint()}</span></h2>
@@ -625,19 +627,21 @@ function renderCpcCompare(){
   </div>
   <div class="panel">
     <div class="tblwrap"><table class="fixedcol">
-      <colgroup><col style="width:48px"><col style="width:140px"><col style="width:90px"><col style="width:100px">
-        <col style="width:90px"><col style="width:100px"><col style="width:110px"></colgroup>
+      <colgroup><col style="width:48px"><col style="width:140px"><col style="width:90px"><col style="width:90px">
+        <col style="width:100px"><col style="width:100px"><col style="width:90px"><col style="width:100px"><col style="width:110px"></colgroup>
       <thead><tr>
-        <th class="l">순위</th><th class="l">키워드</th><th>당월 CPC</th><th>작년동기간 CPC</th>
-        <th>CPC 변화</th><th>CPC 변화율(%)</th><th>작년동기간 클릭순위</th>
+        <th class="l">순위</th><th class="l">키워드</th><th>당월 클릭수</th><th>당월 CPC</th>
+        <th>작년동기간 클릭수</th><th>작년동기간 CPC</th><th>CPC 변화</th><th>CPC 변화율(%)</th><th>작년동기간 클릭순위</th>
       </tr></thead><tbody>${rowsHtml}</tbody></table></div>
   </div>`;
   seg('cpcTopNSeg',[[10,'10'],[30,'30'],[50,'50'],[100,'100']],cpcTopN,v=>{cpcTopN=+v;renderCpcCompare();},{});
 }
 function exportCpcCompareCSV(){
   if(!KWM) return;
-  const rows=[['순위','키워드','당월 CPC','작년동기간 CPC','CPC 변화','CPC 변화율(%)','작년동기간 클릭순위']];
-  cpcCompareRows(cpcTopN).forEach(r=>rows.push([r.rank,r.kw,Math.round(r.curCpc),
+  const rows=[['순위','키워드','당월 클릭수','당월 CPC','작년동기간 클릭수','작년동기간 CPC',
+               'CPC 변화','CPC 변화율(%)','작년동기간 클릭순위']];
+  cpcCompareRows(cpcTopN).forEach(r=>rows.push([r.rank,r.kw,r.curClk,Math.round(r.curCpc),
+    r.lyClk!=null?r.lyClk:'데이터없음',
     r.lyCpc!=null?Math.round(r.lyCpc):'데이터없음',
     r.dCpc!=null?Math.round(r.dCpc):'데이터없음',
     r.pct!=null?r.pct.toFixed(1):'-',
