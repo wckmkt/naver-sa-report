@@ -520,9 +520,11 @@ function exportKwCSV(){
 function exportKwDailyCSV(){
   const rows=[['계정','키워드','기기','입찰가','노출','클릭','비용','CTR(%)','CPC',
                '전환(에어브릿지)','매출(에어브릿지)','전환수(네이버·참고)','전환매출(네이버·참고)','평균순위',
-               '지난주동요일노출','지난주동요일클릭','지난주동요일비용','클릭증감']];
+               '전일노출','전일클릭','전일비용','클릭증감(전일대비)',
+               '지난주동요일노출','지난주동요일클릭','지난주동요일비용','클릭증감(지난주대비)']];
   kwDailyRows().forEach(k=>rows.push([k.acct,k.kw,DL[k.device]||k.device,k.bid,
     k.imp,k.clk,k.cost,k.ctr.toFixed(2),Math.round(k.cpc),k.abOrd,k.abRev,k.conv,k.convAmt,k.rnk,
+    k.bImp,k.bClk,k.bCost,k.clk-k.bClk,
     k.wImp,k.wClk,k.wCost,k.clk-k.wClk]));
   downloadCSV(`naver_키워드_전일자_rawdata_${KWD.day}.csv`,rows);
 }
@@ -1254,7 +1256,8 @@ function kwDailyRows(){
     a.keywords.forEach(r=>{
       const k={acct:a.name,kw:r[ix.kw],camp:r[ix.camp],grp:r[ix.grp],kind:r[ix.kind],device:r[ix.device],
         bid:r[ix.bid],imp:r[ix.imp],clk:r[ix.clk],cost:r[ix.cost],conv:r[ix.conv],convAmt:r[ix.convAmt],rnk:r[ix.rnk],
-        wImp:r[ix.wImp]||0,wClk:r[ix.wClk]||0,wCost:r[ix.wCost]||0,wConv:r[ix.wConv]||0,wConvAmt:r[ix.wConvAmt]||0};
+        wImp:r[ix.wImp]||0,wClk:r[ix.wClk]||0,wCost:r[ix.wCost]||0,wConv:r[ix.wConv]||0,wConvAmt:r[ix.wConvAmt]||0,
+        bImp:r[ix.bImp]||0,bClk:r[ix.bClk]||0,bCost:r[ix.bCost]||0,bConv:r[ix.bConv]||0,bConvAmt:r[ix.bConvAmt]||0};
       if(k.kind!=='SA') return;   // 키워드탭은 파워링크만(쇼핑검색은 등록 키워드가 사실상 없어 노이즈)
       if(device!=='ALL'&&k.device!==device) return;
       k.ctr=k.imp?k.clk/k.imp*100:0; k.cpc=k.clk?k.cost/k.clk:0;
