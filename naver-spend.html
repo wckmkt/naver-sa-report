@@ -518,10 +518,11 @@ function exportKwCSV(){
   downloadCSV(`naver_키워드_MTD백데이터_${m?m.since:'미가용'}_${m?m.until:''}.csv`,rows);
 }
 function exportKwDailyCSV(){
-  const rows=[['계정','키워드','기기','입찰가','노출','클릭','비용','CTR(%)','CPC','전환수','전환매출','평균순위',
+  const rows=[['계정','키워드','기기','입찰가','노출','클릭','비용','CTR(%)','CPC',
+               '전환(에어브릿지)','매출(에어브릿지)','전환수(네이버·참고)','전환매출(네이버·참고)','평균순위',
                '지난주동요일노출','지난주동요일클릭','지난주동요일비용','클릭증감']];
   kwDailyRows().forEach(k=>rows.push([k.acct,k.kw,DL[k.device]||k.device,k.bid,
-    k.imp,k.clk,k.cost,k.ctr.toFixed(2),Math.round(k.cpc),k.conv,k.convAmt,k.rnk,
+    k.imp,k.clk,k.cost,k.ctr.toFixed(2),Math.round(k.cpc),k.abOrd,k.abRev,k.conv,k.convAmt,k.rnk,
     k.wImp,k.wClk,k.wCost,k.clk-k.wClk]));
   downloadCSV(`naver_키워드_전일자_rawdata_${KWD.day}.csv`,rows);
 }
@@ -1258,6 +1259,7 @@ function kwDailyRows(){
       if(device!=='ALL'&&k.device!==device) return;
       k.ctr=k.imp?k.clk/k.imp*100:0; k.cpc=k.clk?k.cost/k.clk:0;
       k.cpa=k.conv?k.cost/k.conv:0; k.roas=k.cost?k.convAmt/k.cost*100:0;
+      const ab=airbridgeTermMap()[k.kw]; k.abOrd=ab?ab.ord:0; k.abRev=ab?ab.rev:0;
       out.push(k);
     });});
   _kwdCache={key:ck,rows:out};
