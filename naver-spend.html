@@ -519,11 +519,13 @@ function exportKwCSV(){
 }
 function exportKwDailyCSV(){
   const rows=[['계정','키워드','기기','입찰가','노출','클릭','비용','CTR(%)','CPC',
-               '전환(에어브릿지)','매출(에어브릿지)','전환수(네이버·참고)','전환매출(네이버·참고)','평균순위',
+               '전환(에어브릿지)','매출(에어브릿지)','전일전환(에어브릿지)','전일매출(에어브릿지)',
+               '전환증감(전일대비)','매출증감(전일대비)','평균순위',
                '전일노출','전일클릭','전일비용','클릭증감(전일대비)',
                '지난주동요일노출','지난주동요일클릭','지난주동요일비용','클릭증감(지난주대비)']];
   kwDailyRows().forEach(k=>rows.push([k.acct,k.kw,DL[k.device]||k.device,k.bid,
-    k.imp,k.clk,k.cost,k.ctr.toFixed(2),Math.round(k.cpc),k.abOrd,k.abRev,k.conv,k.convAmt,k.rnk,
+    k.imp,k.clk,k.cost,k.ctr.toFixed(2),Math.round(k.cpc),
+    k.abOrd,k.abRev,k.bAbOrd,k.bAbRev,k.abOrd-k.bAbOrd,k.abRev-k.bAbRev,k.rnk,
     k.bImp,k.bClk,k.bCost,k.clk-k.bClk,
     k.wImp,k.wClk,k.wCost,k.clk-k.wClk]));
   downloadCSV(`naver_키워드_전일자_rawdata_${KWD.day}.csv`,rows);
@@ -1263,6 +1265,7 @@ function kwDailyRows(){
       k.ctr=k.imp?k.clk/k.imp*100:0; k.cpc=k.clk?k.cost/k.clk:0;
       k.cpa=k.conv?k.cost/k.conv:0; k.roas=k.cost?k.convAmt/k.cost*100:0;
       const ab=airbridgeTermMap()[k.kw]; k.abOrd=ab?ab.ord:0; k.abRev=ab?ab.rev:0;
+      const abp=airbridgePrevDayTermMap()[k.kw]; k.bAbOrd=abp?abp.ord:0; k.bAbRev=abp?abp.rev:0;
       out.push(k);
     });});
   _kwdCache={key:ck,rows:out};
@@ -1702,6 +1705,17 @@ function airbridgeTermMap(){
   const m={};
   (AB&&AB.byTerm||[]).forEach(r=>{ m[r[ix.term]]={ord:r[ix.orders],rev:r[ix.revenue]}; });
   _abMapCache=m;
+  return m;
+}
+// 전일(어제의 하루 전) 에어브릿지 — AB.prevDay는 airbridge_conv.py가 자체 아카이브에서
+// 재조회 없이 붙여준 값(2026-08-12 추가). 아직 아카이브가 없는 초기 상태면 null일 수 있음.
+let _abpMapCache=null;
+function airbridgePrevDayTermMap(){
+  if(_abpMapCache) return _abpMapCache;
+  const ix={}; (AB&&AB.termCols||[]).forEach((c,i)=>ix[c]=i);
+  const m={};
+  (AB&&AB.prevDay&&AB.prevDay.byTerm||[]).forEach(r=>{ m[r[ix.term]]={ord:r[ix.orders],rev:r[ix.revenue]}; });
+  _abpMapCache=m;
   return m;
 }
 let _abmMapCache=null;
