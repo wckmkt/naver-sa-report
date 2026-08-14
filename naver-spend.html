@@ -669,7 +669,6 @@ function renderCpcCompare(){
       <div class="val" style="color:${avgPct>0?'var(--critical)':avgPct<0?'var(--pc)':'var(--ink)'}">${avgPct>0?'+':''}${avgPct.toFixed(1)}%</div>
       <div class="sub">평균 CPC ${won(Math.round(avgLy))} → ${won(Math.round(avgCur))} · 양쪽 데이터 있는 ${withData.length}개 기준</div></div>
   </div>
-  ${cpcTrendPanelHTML()}
   <div class="panel">
     <div class="tblwrap"><table class="fixedcol" id="cpctbl">
       <colgroup><col style="width:48px"><col style="width:140px"><col style="width:90px"><col style="width:90px">
@@ -678,7 +677,8 @@ function renderCpcCompare(){
         <th class="l">순위</th><th class="l">키워드</th><th>당월 클릭수</th><th>당월 CPC</th>
         <th>작년동기간 클릭수</th><th>작년동기간 CPC</th><th>CPC 변화</th><th>CPC 변화율(%)</th><th>작년동기간 클릭순위</th>
       </tr></thead><tbody>${rowsHtml}</tbody></table></div>
-  </div>`;
+  </div>
+  ${cpcTrendPanelHTML()}`;
   seg('cpcTopNSeg',[[10,'10'],[30,'30'],[50,'50'],[100,'100']],cpcTopN,v=>{cpcTopN=+v;renderCpcCompare();},{});
   const tbl=document.getElementById('cpctbl');
   if(tbl) tbl.onclick=e=>{
@@ -690,9 +690,10 @@ function renderCpcCompare(){
   };
   renderCpcTrend();
 }
-// ── 키워드 일자별 추이(CPC·평균순위·매출) ────────────────────────────────
-// 세 지표를 한 차트에 겹쳐 "CPC가 오를 때 순위를 지켰는지, 매출이 따라왔는지"를 같이 본다.
-// 축이 3개(비용/순위/매출)라 매출축은 눈금을 숨기고 막대로만 두께감을 준다.
+// ── 키워드 일자별 추이(CPC·평균순위) ─────────────────────────────────────
+// 두 지표를 한 차트에 겹쳐 "CPC가 오를 때 순위를 지켰는지"를 같이 본다.
+// 매출(에어브릿지)은 정합성 검증 전이라 2026-08-14 요청으로 차트에서 제외 — 데이터
+// 자체는 naver_kw_trend.py가 계속 수집하므로(rev/ord 컬럼) 검증 후 되살리면 된다.
 function cpcTrendPanelHTML(){
   if(!KWT) return `<div class="alert info" style="margin-top:8px">
     ℹ️ 키워드별 <b>일자 추이</b>를 보려면 <code>python naver_kw_trend.py</code> 를 실행하세요.</div>`;
@@ -701,9 +702,7 @@ function cpcTrendPanelHTML(){
   return `<div class="panel" id="cpcTrendPanel">
     <div class="ph"><h2>일자별 추이 <span class="hint" id="cpcTrendSub"></span></h2></div>
     <div class="chartbox tall"><canvas id="cpcTrend"></canvas></div>
-    <div class="foot">파워링크(SA) 기준 · <b>전체 계정 합산</b>(상단 계정 필터와 무관) ·
-      매출은 에어브릿지 검색어 매칭(하루 상위 500개 검색어만 보관 → 하위 키워드는 0으로 보일 수 있음) ·
-      클릭은 네이버, 매출은 에어브릿지라 집계 주체가 달라 절대값보다 <b>추세</b>로 읽을 것
+    <div class="foot">파워링크(SA) 기준 · <b>전체 계정 합산</b>(상단 계정 필터와 무관)
       ${miss>0?`· <span style="color:var(--critical)">수집 결측 ${miss}일은 선이 끊겨 표시</span>`:''}</div>
   </div>`;
 }
@@ -721,8 +720,6 @@ function renderCpcTrend(){
   const ink=cvar('--ink2'),grid=cvar('--grid'),axis=cvar('--axis');
   const box=cv.parentElement; cv.width=Math.max(320,box.clientWidth); cv.height=box.clientHeight||340;
   cpcTrendChart=new Chart(cv,{data:{labels:KWT.days.map(md),datasets:[
-    {type:'bar',label:'매출(에어브릿지)',data:pick('rev'),yAxisID:'y2',
-     backgroundColor:cvar('--seq-bg'),borderColor:cvar('--seq'),borderWidth:1,borderRadius:3,order:3},
     {type:'line',label:'CPC',data:pick('cpc'),yAxisID:'y',spanGaps:false,
      borderColor:cvar('--critical'),backgroundColor:cvar('--critical'),borderWidth:2,
      pointRadius:3,tension:.25,order:1},
@@ -735,16 +732,14 @@ function renderCpcTrend(){
         tooltip:{callbacks:{
           label:c=>{const v=series[c.dataIndex]; if(!v) return ' 데이터 없음';
             if(c.dataset.yAxisID==='y') return ` CPC ${won(v[ix.cpc])} (클릭 ${int(v[ix.clk])} · 비용 ${won(v[ix.cost])})`;
-            if(c.dataset.yAxisID==='y1') return ` 평균순위 ${v[ix.rnk]||'—'}`;
-            return ` 매출 ${won(v[ix.rev])} (주문 ${int(v[ix.ord])})`;}}}},
+            return ` 평균순위 ${v[ix.rnk]||'—'}`;}}}},
       scales:{
         x:{grid:{display:false},border:{color:axis},ticks:{color:ink}},
         y:{position:'left',grid:{color:grid},border:{display:false},
            title:{display:true,text:'CPC(원)',color:ink,font:{size:11}},ticks:{color:ink,callback:v=>krw(v)}},
         y1:{position:'right',reverse:true,grid:{display:false},border:{display:false},
             title:{display:true,text:'평균 노출순위(위가 상위)',color:ink,font:{size:11}},
-            ticks:{color:ink,precision:1}},
-        y2:{position:'right',display:false,beginAtZero:true}}}});
+            ticks:{color:ink,precision:1}}}}});
 }
 function exportCpcCompareCSV(){
   if(!KWM) return;
