@@ -420,6 +420,7 @@ const VALID_VIEWS=['spend','sim','kw','cpc'];
 let view=VALID_VIEWS.includes(location.hash.slice(1))?location.hash.slice(1):'spend';
 let scope='ALL', kind='ALL', device='ALL', trendBy='device', acctBy='device', mtdSort='clk', cpcTopN=50;
 let cpcTrendKw=null;   // CPC 비교 탭에서 선택된 키워드(일자별 추이 차트 대상)
+let cpcView='yoy';     // CPC 탭 표 보기: yoy=전년비교 / vol=변동성
 let sortKey='spend', sortDir=-1;
 let tblQuery='', tblStatus='all';
 let hourMetric='spend', hourBy='all';
@@ -625,6 +626,36 @@ function cpcPeriodHint(){
   return `이번달(${ymd(KWM.period.since)}-${ymd(KWM.period.until)}) vs `
     +`작년동기간(${ymd(KWM.ly.since)}-${ymd(KWM.ly.until)}) · 순위는 이번달 클릭순위 기준 · 브랜드 키워드 제외`;
 }
+// ── 변동성 보기 ──────────────────────────────────────────────────────────
+// "순위는 1위로 고정인데 CPC만 출렁이는" 키워드 = 차순위 경쟁사 입찰에 그대로 노출된 키워드.
+// 차순위 과금(GSP) 구조상 1위에서 내 입찰가를 낮춰도 CPC는 안 내려가므로, 여기 상위 키워드는
+// '순위 양보/품질지수/시간대 조정'을 검토할 후보라는 의미지 그 금액이 바로 절감되는 건 아니다.
+// 모집단이 KWT(추이 TOP300)라 전년비교 보기(KWM TOP50)보다 넓다 — 볼륨은 작지만 변동이 큰
+// 키워드가 여기서만 잡힌다(2026-08-14 요청).
+const VOL_MIN_DAYS=7, VOL_MIN_CLK=50, VOL_MIN_COST=100000, VOL_MAX_RNK=1.15, VOL_MIN_SPREAD=1.3;
+function cpcVolatilityRows(topN){
+  if(!KWT||!KWT.keywords) return [];
+  const ix={}; (KWT.cols||[]).forEach((c,i)=>ix[c]=i);
+  const out=[];
+  for(const kw in KWT.keywords){
+    if(BRAND_KW_RE.test(kw)) continue;
+    const v=(KWT.keywords[kw]||[]).filter(x=>x&&x[ix.clk]>0);
+    if(v.length<VOL_MIN_DAYS) continue;
+    const clk=v.reduce((s,x)=>s+x[ix.clk],0), cost=v.reduce((s,x)=>s+x[ix.cost],0);
+    if(clk<VOL_MIN_CLK||cost<VOL_MIN_COST) continue;
+    const rnks=v.map(x=>x[ix.rnk]), avgRnk=rnks.reduce((a,b)=>a+b,0)/rnks.length;
+    if(avgRnk>VOL_MAX_RNK||Math.max(...rnks)>VOL_MAX_RNK+0.35) continue;   // 1위 고정만
+    const cpcs=v.map(x=>x[ix.cpc]), minCpc=Math.min(...cpcs), maxCpc=Math.max(...cpcs);
+    const spread=minCpc?maxCpc/minCpc:0;
+    if(spread<VOL_MIN_SPREAD) continue;
+    const avgCpc=cost/clk;
+    out.push({kw,days:v.length,clk,cost,avgRnk,minCpc,maxCpc,avgCpc,spread,
+      exposure:Math.round((avgCpc-minCpc)*clk)});
+  }
+  out.sort((a,b)=>b.exposure-a.exposure);
+  out.forEach((o,i)=>o.rank=i+1);
+  return out.slice(0,topN);
+}
 function renderCpcCompare(){
   const body=document.getElementById('cpcBody');
   if(!KWM){
@@ -632,7 +663,8 @@ function renderCpcCompare(){
       터미널에서 <code>python naver_kw_mtd.py</code> 를 실행하세요.</div></div>`;
     return;
   }
-  const rows=cpcCompareRows(cpcTopN);
+  const vol=cpcView==='vol';
+  const rows=vol?cpcVolatilityRows(cpcTopN):cpcCompareRows(cpcTopN);
   // 평균 CPC 변화율 = (당월 CPC 평균) vs (작년동기간 CPC 평균).
   // 행별 변화율을 단순평균하면 저가 키워드의 폭등률(예: 63원→637원 = +913%)이 그대로 반영돼
   // 체감보다 크게 부풀려진다(같은 데이터로 83.7% vs 65.5%) — 평균끼리 비교로 바꿈(2026-08-14).
@@ -654,31 +686,53 @@ function renderCpcCompare(){
   }
   const rowsHtml=rows.map(r=>{
     const on=hasTrend(r.kw);
-    return `<tr${r.kw===cpcTrendKw?' class="mtdmatch"':''}${on?` data-kw="${r.kw.replace(/"/g,'&quot;')}" style="cursor:pointer" title="클릭하면 일자별 추이"`:''}>
-    <td class="l">${r.rank}</td><td class="l kwcell" title="${r.kw}">${r.kw}</td>
-    ${numCell(r.curClk)}${wonCell(r.curCpc)}${numCell(r.lyClk)}${wonCell(r.lyCpc)}${dCell(r.dCpc)}${pctCell(r.pct)}
+    const head=`<tr${r.kw===cpcTrendKw?' class="mtdmatch"':''}${on?` data-kw="${r.kw.replace(/"/g,'&quot;')}" style="cursor:pointer" title="클릭하면 일자별 추이"`:''}>
+    <td class="l">${r.rank}</td><td class="l kwcell" title="${r.kw}">${r.kw}</td>`;
+    if(vol) return head+`${numCell(r.clk)}${wonCell(r.cost)}
+      <td class="num ref">${r.avgRnk.toFixed(2)}</td>${wonCell(r.avgCpc)}
+      <td class="num">${won(r.minCpc)} ~ ${won(r.maxCpc)}</td>
+      <td class="num" style="color:${r.spread>=2?'var(--critical)':'var(--ink)'}">${r.spread.toFixed(1)}배</td>
+      ${wonCell(r.exposure)}</tr>`;
+    return head+`${numCell(r.curClk)}${wonCell(r.curCpc)}${numCell(r.lyClk)}${wonCell(r.lyCpc)}${dCell(r.dCpc)}${pctCell(r.pct)}
     <td class="num ref">${r.lyRank!=null?r.lyRank:'-'}</td>
-  </tr>`;}).join('')||'<tr><td colspan="9" class="empty">데이터 없음</td></tr>';
+  </tr>`;}).join('')||`<tr><td colspan="9" class="empty">${vol&&!KWT?'추이 데이터가 없습니다 — python naver_kw_trend.py 실행':'데이터 없음'}</td></tr>`;
 
+  const volExposure=vol?rows.reduce((s,r)=>s+r.exposure,0):0;
+  const volAvgSpread=vol&&rows.length?rows.reduce((s,r)=>s+r.spread,0)/rows.length:0;
   body.innerHTML=`
-  <div class="ph" style="margin-top:16px"><h2 style="font-size:14px">CPC 비교 <span class="hint">${cpcPeriodHint()}</span></h2>
-    <div class="grp"><span class="lbl">TOP</span><div class="seg" id="cpcTopNSeg"></div></div></div>
+  <div class="ph" style="margin-top:16px"><h2 style="font-size:14px">${vol?'CPC 변동성':'CPC 비교'}
+    <span class="hint">${vol
+      ?`평균순위 ${VOL_MAX_RNK} 이하(1위 고정)인데 CPC가 ${VOL_MIN_SPREAD}배 이상 출렁인 키워드 · 추이 수집분(TOP300) 기준`
+      :cpcPeriodHint()}</span></h2>
+    <div class="grp"><span class="lbl">보기</span><div class="seg" id="cpcViewSeg"></div>
+      <span class="lbl">TOP</span><div class="seg" id="cpcTopNSeg"></div></div></div>
   <div class="tiles">
-    <div class="tile"><div class="lab">TOP${cpcTopN} 키워드</div><div class="val">${rows.length}</div></div>
-    <div class="tile"><div class="lab">평균 CPC 변화율</div>
-      <div class="val" style="color:${avgPct>0?'var(--critical)':avgPct<0?'var(--pc)':'var(--ink)'}">${avgPct>0?'+':''}${avgPct.toFixed(1)}%</div>
-      <div class="sub">평균 CPC ${won(Math.round(avgLy))} → ${won(Math.round(avgCur))} · 양쪽 데이터 있는 ${withData.length}개 기준</div></div>
+    <div class="tile"><div class="lab">${vol?'해당 키워드':'TOP'+cpcTopN+' 키워드'}</div><div class="val">${rows.length}</div>
+      ${vol?`<div class="sub">클릭 ${VOL_MIN_CLK}↑ · 비용 ${krw(VOL_MIN_COST)}↑ · ${VOL_MIN_DAYS}일↑ 수집</div>`:''}</div>
+    ${vol
+      ?`<div class="tile"><div class="lab">변동 노출액 <span style="font-weight:500;color:var(--muted)">합계</span></div>
+          <div class="val">${krw(volExposure)}</div>
+          <div class="sub">평균 변동폭 ${volAvgSpread.toFixed(1)}배 · 경쟁사 입찰에 흔들린 금액(절감 보장액 아님)</div></div>`
+      :`<div class="tile"><div class="lab">평균 CPC 변화율</div>
+          <div class="val" style="color:${avgPct>0?'var(--critical)':avgPct<0?'var(--pc)':'var(--ink)'}">${avgPct>0?'+':''}${avgPct.toFixed(1)}%</div>
+          <div class="sub">평균 CPC ${won(Math.round(avgLy))} → ${won(Math.round(avgCur))} · 양쪽 데이터 있는 ${withData.length}개 기준</div></div>`}
   </div>
   <div class="panel">
     <div class="tblwrap"><table class="fixedcol" id="cpctbl">
       <colgroup><col style="width:48px"><col style="width:140px"><col style="width:90px"><col style="width:90px">
-        <col style="width:100px"><col style="width:100px"><col style="width:90px"><col style="width:100px"><col style="width:110px"></colgroup>
+        <col style="width:100px"><col style="width:${vol?'140px':'100px'}"><col style="width:90px"><col style="width:100px"><col style="width:110px"></colgroup>
       <thead><tr>
-        <th class="l">순위</th><th class="l">키워드</th><th>당월 클릭수</th><th>당월 CPC</th>
-        <th>작년동기간 클릭수</th><th>작년동기간 CPC</th><th>CPC 변화</th><th>CPC 변화율(%)</th><th>작년동기간 클릭순위</th>
+        <th class="l">순위</th><th class="l">키워드</th>
+        ${vol
+          ?`<th>클릭수</th><th>비용</th><th>평균 노출순위</th><th>평균 CPC</th><th>CPC 최저~최고</th><th>변동폭</th><th>변동 노출액</th>`
+          :`<th>당월 클릭수</th><th>당월 CPC</th><th>작년동기간 클릭수</th><th>작년동기간 CPC</th><th>CPC 변화</th><th>CPC 변화율(%)</th><th>작년동기간 클릭순위</th>`}
       </tr></thead><tbody>${rowsHtml}</tbody></table></div>
+    ${vol?`<div class="foot">차순위 과금(GSP) 구조상 <b>1위에서 입찰가만 낮춰도 CPC는 안 내려갑니다</b> —
+      실제 CPC를 낮추려면 ①순위 양보 ②품질지수 개선 ③경쟁 심한 시간대 조정 중 하나가 필요합니다.
+      <b>변동 노출액</b> = (평균 CPC − 최저 CPC) × 클릭수, 즉 그 기간 실제로 달성했던 최저 CPC 대비 초과 지출분입니다.</div>`:''}
   </div>
   ${cpcTrendPanelHTML()}`;
+  seg('cpcViewSeg',[['yoy','전년비교'],['vol','변동성']],cpcView,v=>{cpcView=v;renderCpcCompare();},{});
   seg('cpcTopNSeg',[[10,'10'],[30,'30'],[50,'50'],[100,'100']],cpcTopN,v=>{cpcTopN=+v;renderCpcCompare();},{});
   const tbl=document.getElementById('cpctbl');
   if(tbl) tbl.onclick=e=>{
@@ -743,6 +797,14 @@ function renderCpcTrend(){
 }
 function exportCpcCompareCSV(){
   if(!KWM) return;
+  if(cpcView==='vol'){
+    const rows=[['순위','키워드','수집일수','클릭수','비용','평균 노출순위','평균 CPC',
+                 '최저 CPC','최고 CPC','변동폭(배)','변동 노출액']];
+    cpcVolatilityRows(cpcTopN).forEach(r=>rows.push([r.rank,r.kw,r.days,r.clk,r.cost,
+      r.avgRnk.toFixed(2),Math.round(r.avgCpc),r.minCpc,r.maxCpc,r.spread.toFixed(2),r.exposure]));
+    downloadCSV(`naver_키워드_CPC변동성_TOP${cpcTopN}_${KWM.period.since}_${KWM.period.until}.csv`,rows);
+    return;
+  }
   const rows=[['순위','키워드','당월 클릭수','당월 CPC','작년동기간 클릭수','작년동기간 CPC',
                'CPC 변화','CPC 변화율(%)','작년동기간 클릭순위']];
   cpcCompareRows(cpcTopN).forEach(r=>rows.push([r.rank,r.kw,r.curClk,Math.round(r.curCpc),
