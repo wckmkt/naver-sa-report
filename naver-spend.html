@@ -483,8 +483,17 @@ function exportSpendCSV(){
         e.ctr.toFixed(2),Math.round(e.cpc),Math.round(e.cpa),e.roas.toFixed(1)]); }); });
   downloadCSV(`naver_소진_rawdata_${pFrom}_${pTo}.csv`,rows);
 }
+// 캠페인명 규칙: E_naver_SA_{M|P}_{그룹유형}_{카테고리}_{pm|busi} — 6번째(0-base 5) 세그먼트가
+// 카테고리(어패럴/가방/신발/라이프/액세서리/액티브/뷰티/키즈/시즌/날씨, 카테고리 없는 캠페인은 x).
+// 64개 캠페인명 전수 확인(2026-08-13), 예외 없이 7세그먼트 고정 패턴.
+function campCategory(camp){
+  const p=(camp||'').split('_');
+  return p.length>=6 ? p[5] : '';
+}
 // 화면의 '키워드 상세' 표는 금주(KW.period)만 보여주지만, CSV는 월 누적(KW.mtd/mtdKeywords)을
-// 받고 싶다는 요청(2026-08-06) — 기기 구분 없이 계정+키워드 텍스트로 합쳐 kwRows()와 같은 방식으로 집계.
+// 받고 싶다는 요청(2026-08-06) — 기기 구분 없이 계정+캠페인+키워드로 합쳐 kwRows()와 같은 방식으로
+// 집계. 캠페인(→카테고리)까지 그룹 키에 넣은 건 같은 키워드가 여러 카테고리 캠페인에 걸쳐 등록된
+// 경우를 뭉개지 않고 그대로 보여달라는 요청(2026-08-13, 카테고리 확인 목적) 때문.
 function kwMtdBackupRows(){
   if(!KW) return [];
   const MC=KW.mtdCols||['kw','camp','grp','kind','device','bid','imp','clk','cost','conv','convAmt','rnk'];
@@ -494,23 +503,25 @@ function kwMtdBackupRows(){
     (a.mtdKeywords||[]).forEach(r=>{
       if(r[mix.kind]!=='SA') return;
       const dev=r[mix.device]; if(device!=='ALL'&&dev!==device) return;
-      const kw=r[mix.kw], key=a.name+'|'+kw, clk=r[mix.clk];
-      const o=agg[key]||(agg[key]={acct:a.name,kw,imp:0,clk:0,cost:0,conv:0,convAmt:0,bidSum:0,bidW:0,rnkSum:0,rnkW:0});
+      const kw=r[mix.kw], camp=r[mix.camp], key=a.name+'|'+camp+'|'+kw, clk=r[mix.clk];
+      const o=agg[key]||(agg[key]={acct:a.name,camp,category:campCategory(camp),kw,
+        imp:0,clk:0,cost:0,conv:0,convAmt:0,bidSum:0,bidW:0,rnkSum:0,rnkW:0});
       o.imp+=r[mix.imp]; o.clk+=clk; o.cost+=r[mix.cost]; o.conv+=r[mix.conv]; o.convAmt+=r[mix.convAmt];
       const bw=clk||1; o.bidSum+=r[mix.bid]*bw; o.bidW+=bw;
       o.rnkSum+=(r[mix.rnk]||0)*clk; o.rnkW+=clk;
     });});
-  return Object.values(agg).map(o=>({acct:o.acct,kw:o.kw,imp:o.imp,clk:o.clk,cost:o.cost,
-    conv:o.conv,convAmt:o.convAmt,bid:o.bidW?Math.round(o.bidSum/o.bidW):0,
+  return Object.values(agg).map(o=>({acct:o.acct,camp:o.camp,category:o.category,kw:o.kw,
+    imp:o.imp,clk:o.clk,cost:o.cost,conv:o.conv,convAmt:o.convAmt,
+    bid:o.bidW?Math.round(o.bidSum/o.bidW):0,
     rnk:o.rnkW?Math.round(o.rnkSum/o.rnkW*10)/10:0}));
 }
 function exportKwCSV(){
   const abLabel=ABM?`·${ABM.since}~${ABM.until}`:'·MTD 데이터 없음';
-  const rows=[['클릭순위','계정','키워드','입찰가','노출','클릭','비용','CTR(%)','CPC','평균순위',
+  const rows=[['클릭순위','계정','카테고리','캠페인','키워드','입찰가','노출','클릭','비용','CTR(%)','CPC','평균순위',
                `전환(에어브릿지${abLabel})`,`매출(에어브릿지${abLabel})`,'전환수(네이버·참고)','전환매출(네이버·참고)']];
   kwMtdBackupRows().sort((a,b)=>b.clk-a.clk).forEach((k,i)=>{
     const ab=airbridgeMtdTermMap()[k.kw];
-    rows.push([i+1,k.acct,k.kw,k.bid,k.imp,k.clk,k.cost,
+    rows.push([i+1,k.acct,k.category,k.camp,k.kw,k.bid,k.imp,k.clk,k.cost,
       (k.imp?k.clk/k.imp*100:0).toFixed(2),Math.round(k.clk?k.cost/k.clk:0),k.rnk,
       ab?ab.ord:0,ab?ab.rev:0,k.conv,k.convAmt]);
   });
