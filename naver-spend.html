@@ -414,7 +414,8 @@ const ASTART=D.period.archiveStart||D.period.monthStart, MSTART=D.period.monthSt
 const LMEND=shiftDay(MSTART,-1), LMSTART=LMEND.slice(0,8)+'01';
 
 // ── 상태 ────────────────────────────────────────────────────────────────
-let view='spend';
+const VALID_VIEWS=['spend','sim','kw','cpc'];
+let view=VALID_VIEWS.includes(location.hash.slice(1))?location.hash.slice(1):'spend';
 let scope='ALL', kind='ALL', device='ALL', trendBy='device', acctBy='device', mtdSort='clk', cpcTopN=50;
 let sortKey='spend', sortDir=-1;
 let tblQuery='', tblStatus='all';
@@ -582,7 +583,7 @@ function exportKwMtdCSV(){
         o.clk?Math.round(o.cost/o.clk):0, o.rnkW?Math.round(o.rnkSum/o.rnkW*10)/10:'']);
     });
   };
-  push('curTop',`이번달(${ymd(KWM.period.since)}-${ymd(KWM.period.until)})`,KWM.cols);
+  push('curTopFull',`이번달(${ymd(KWM.period.since)}-${ymd(KWM.period.until)})·전수`,KWM.cols);
   push('lyTopFull',`작년동기간(${ymd(KWM.ly.since)}-${ymd(KWM.ly.until)})·전수`,KWM.lyCols);
   downloadCSV(`naver_키워드_MTD비교_${KWM.period.since}_${KWM.period.until}.csv`,rows);
 }
@@ -1900,7 +1901,9 @@ function renderAll(){
   else {renderKw();}
 }
 document.getElementById('nav').onclick=e=>{const b=e.target.closest('button'); if(!b)return;
-  view=b.dataset.v; renderAll();};
+  view=b.dataset.v; location.hash=view; renderAll();};
+window.addEventListener('hashchange',()=>{
+  if(VALID_VIEWS.includes(location.hash.slice(1))){ view=location.hash.slice(1); renderAll(); }});
 document.getElementById('themeBtn').onclick=()=>{
   const cur=document.documentElement.getAttribute('data-theme');
   const next=cur==='dark'?'light':(cur==='light'?'dark':'dark');
