@@ -576,7 +576,7 @@ function exportKwMtdCSV(){
     });
   };
   push('curTop',`이번달(${ymd(KWM.period.since)}-${ymd(KWM.period.until)})`,KWM.cols);
-  push('lyTop',`작년동기간(${ymd(KWM.ly.since)}-${ymd(KWM.ly.until)})`,KWM.lyCols);
+  push('lyTopFull',`작년동기간(${ymd(KWM.ly.since)}-${ymd(KWM.ly.until)})·전수`,KWM.lyCols);
   downloadCSV(`naver_키워드_MTD비교_${KWM.period.since}_${KWM.period.until}.csv`,rows);
 }
 
