@@ -562,17 +562,24 @@ function exportKwYesterdayLyCSV(){
   }
   downloadCSV(`naver_키워드_어제vs작년동요일_${KWD?KWD.day:''}.csv`,rows);
 }
+// 계정 컬럼 없이 내보내다 보니 같은 키워드가 계정마다 따로 행으로 찍혀 "중복"처럼 보였다
+// (예: 망고매니플리즈가 wckr·wckr5 둘 다에 있어 두 줄) — 계정 구분 없이 키워드 기준으로
+// 합산해서 한 줄로 보여달라는 요청(2026-08-14)으로 계정 간 집계로 전환.
 function exportKwMtdCSV(){
   if(!KWM) return;
   const rows=[['구분','클릭순위','키워드','노출','클릭','비용','CTR(%)','CPC','평균순위']];
   const push=(field,label,cols)=>{
     const mix={}; cols.forEach((c,i)=>mix[c]=i);
-    const group=[];
-    (KWM.accounts||[]).forEach(a=>(a[field]||[]).forEach(r=>group.push(r)));
-    group.sort((x,y)=>y[mix.clk]-x[mix.clk]).forEach((r,i)=>{
-      const imp=r[mix.imp], clk=r[mix.clk], cost=r[mix.cost];
-      rows.push([label,i+1,r[mix.kw],imp,clk,cost,(imp?clk/imp*100:0).toFixed(2),
-        clk?Math.round(cost/clk):0, mix.rnk!=null?r[mix.rnk]:'']);
+    const agg={};
+    (KWM.accounts||[]).forEach(a=>(a[field]||[]).forEach(r=>{
+      const kw=r[mix.kw], clk=r[mix.clk];
+      const o=agg[kw]||(agg[kw]={kw,imp:0,clk:0,cost:0,rnkSum:0,rnkW:0});
+      o.imp+=r[mix.imp]; o.clk+=clk; o.cost+=r[mix.cost];
+      if(mix.rnk!=null){ o.rnkSum+=(r[mix.rnk]||0)*clk; o.rnkW+=clk; }
+    }));
+    Object.values(agg).sort((a,b)=>b.clk-a.clk).forEach((o,i)=>{
+      rows.push([label,i+1,o.kw,o.imp,o.clk,o.cost,(o.imp?o.clk/o.imp*100:0).toFixed(2),
+        o.clk?Math.round(o.cost/o.clk):0, o.rnkW?Math.round(o.rnkSum/o.rnkW*10)/10:'']);
     });
   };
   push('curTop',`이번달(${ymd(KWM.period.since)}-${ymd(KWM.period.until)})`,KWM.cols);
