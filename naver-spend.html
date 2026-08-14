@@ -368,7 +368,8 @@ code{background:color-mix(in srgb,var(--ink) 7%,transparent);padding:1px 6px;bor
     ['airbridge_conv_data.js', 'window.__abMissing=1'],
     ['airbridge_conv_mtd_data.js', 'window.__abmMissing=1'],
     ['naver_kw_bidest_data.js', 'window.__beMissing=1'],
-    ['naver_serp_data.js', 'window.__serpMissing=1']];
+    ['naver_serp_data.js', 'window.__serpMissing=1'],
+    ['naver_kw_trend_data.js', 'window.__kwtMissing=1']];
   files.forEach(function(f){
     var src = Array.isArray(f) ? f[0] : f, onerr = Array.isArray(f) ? f[1] : '';
     document.write('<script src="' + src + '?v=' + v + '"' +
@@ -383,6 +384,7 @@ const KWD = window.NAVER_KW_DAILY || null;
 const KWM = window.NAVER_KW_MTD || null;
 const AB = window.AIRBRIDGE_CONV || null;
 const ABM = window.AIRBRIDGE_CONV_MTD || null;
+const KWT = window.NAVER_KW_TREND || null;   // 키워드별 MTD 일자 추이(CPC 비교 탭 차트)
 const BE = window.NAVER_KW_BIDEST || null;   // 순위별 입찰가·절감액 (naver_kw_bid_estimate.py)
 const SERP = window.NAVER_SERP || null;      // 파워링크 실측순위·경쟁사 (naver_serp_rank.py)
 if(!D){ document.body.innerHTML='<div class="wrap"><h1>데이터 없음</h1><p>naver_spend_collect.py를 먼저 실행하세요.</p></div>'; }
@@ -417,6 +419,7 @@ const LMEND=shiftDay(MSTART,-1), LMSTART=LMEND.slice(0,8)+'01';
 const VALID_VIEWS=['spend','sim','kw','cpc'];
 let view=VALID_VIEWS.includes(location.hash.slice(1))?location.hash.slice(1):'spend';
 let scope='ALL', kind='ALL', device='ALL', trendBy='device', acctBy='device', mtdSort='clk', cpcTopN=50;
+let cpcTrendKw=null;   // CPC 비교 탭에서 선택된 키워드(일자별 추이 차트 대상)
 let sortKey='spend', sortDir=-1;
 let tblQuery='', tblStatus='all';
 let hourMetric='spend', hourBy='all';
@@ -630,19 +633,32 @@ function renderCpcCompare(){
     return;
   }
   const rows=cpcCompareRows(cpcTopN);
-  const withData=rows.filter(r=>r.pct!=null);
-  const avgPct=withData.length?withData.reduce((s,r)=>s+r.pct,0)/withData.length:0;
+  // 평균 CPC 변화율 = (당월 CPC 평균) vs (작년동기간 CPC 평균).
+  // 행별 변화율을 단순평균하면 저가 키워드의 폭등률(예: 63원→637원 = +913%)이 그대로 반영돼
+  // 체감보다 크게 부풀려진다(같은 데이터로 83.7% vs 65.5%) — 평균끼리 비교로 바꿈(2026-08-14).
+  const withData=rows.filter(r=>r.lyCpc!=null&&r.lyCpc>0);
+  const avgCur=withData.length?withData.reduce((s,r)=>s+r.curCpc,0)/withData.length:0;
+  const avgLy=withData.length?withData.reduce((s,r)=>s+r.lyCpc,0)/withData.length:0;
+  const avgPct=avgLy?(avgCur/avgLy-1)*100:0;
   const pctCell=v=>v==null?'<td class="num ref">-</td>'
     :`<td class="num" style="color:${v>0?'var(--critical)':v<0?'var(--pc)':'var(--muted)'}">${v>0?'+':''}${v.toFixed(1)}%</td>`;
   const wonCell=v=>v==null?'<td class="num ref">데이터없음</td>':`<td class="num">${won(Math.round(v))}</td>`;
   const numCell=v=>v==null?'<td class="num ref">데이터없음</td>':`<td class="num">${int(v)}</td>`;
   const dCell=v=>v==null?'<td class="num ref">데이터없음</td>'
     :`<td class="num" style="color:${v>0?'var(--critical)':v<0?'var(--pc)':'var(--muted)'}">${v>0?'+':''}${won(Math.round(v))}</td>`;
-  const rowsHtml=rows.map(r=>`<tr>
+  // 추이 데이터가 있는 키워드만 클릭 가능 — 없는 행을 눌렀을 때 빈 차트가 뜨면 오히려 혼란스럽다.
+  const hasTrend=kw=>!!(KWT&&KWT.keywords&&KWT.keywords[kw]);
+  if(rows.length&&(!cpcTrendKw||!rows.some(r=>r.kw===cpcTrendKw))){
+    const first=rows.find(r=>hasTrend(r.kw));   // 기본은 1위(추이 있는 것 중)
+    cpcTrendKw=first?first.kw:null;
+  }
+  const rowsHtml=rows.map(r=>{
+    const on=hasTrend(r.kw);
+    return `<tr${r.kw===cpcTrendKw?' class="mtdmatch"':''}${on?` data-kw="${r.kw.replace(/"/g,'&quot;')}" style="cursor:pointer" title="클릭하면 일자별 추이"`:''}>
     <td class="l">${r.rank}</td><td class="l kwcell" title="${r.kw}">${r.kw}</td>
     ${numCell(r.curClk)}${wonCell(r.curCpc)}${numCell(r.lyClk)}${wonCell(r.lyCpc)}${dCell(r.dCpc)}${pctCell(r.pct)}
     <td class="num ref">${r.lyRank!=null?r.lyRank:'-'}</td>
-  </tr>`).join('')||'<tr><td colspan="9" class="empty">데이터 없음</td></tr>';
+  </tr>`;}).join('')||'<tr><td colspan="9" class="empty">데이터 없음</td></tr>';
 
   body.innerHTML=`
   <div class="ph" style="margin-top:16px"><h2 style="font-size:14px">CPC 비교 <span class="hint">${cpcPeriodHint()}</span></h2>
@@ -651,10 +667,11 @@ function renderCpcCompare(){
     <div class="tile"><div class="lab">TOP${cpcTopN} 키워드</div><div class="val">${rows.length}</div></div>
     <div class="tile"><div class="lab">평균 CPC 변화율</div>
       <div class="val" style="color:${avgPct>0?'var(--critical)':avgPct<0?'var(--pc)':'var(--ink)'}">${avgPct>0?'+':''}${avgPct.toFixed(1)}%</div>
-      <div class="sub">데이터 있는 ${withData.length}개 키워드 단순평균</div></div>
+      <div class="sub">평균 CPC ${won(Math.round(avgLy))} → ${won(Math.round(avgCur))} · 양쪽 데이터 있는 ${withData.length}개 기준</div></div>
   </div>
+  ${cpcTrendPanelHTML()}
   <div class="panel">
-    <div class="tblwrap"><table class="fixedcol">
+    <div class="tblwrap"><table class="fixedcol" id="cpctbl">
       <colgroup><col style="width:48px"><col style="width:140px"><col style="width:90px"><col style="width:90px">
         <col style="width:100px"><col style="width:100px"><col style="width:90px"><col style="width:100px"><col style="width:110px"></colgroup>
       <thead><tr>
@@ -663,6 +680,71 @@ function renderCpcCompare(){
       </tr></thead><tbody>${rowsHtml}</tbody></table></div>
   </div>`;
   seg('cpcTopNSeg',[[10,'10'],[30,'30'],[50,'50'],[100,'100']],cpcTopN,v=>{cpcTopN=+v;renderCpcCompare();},{});
+  const tbl=document.getElementById('cpctbl');
+  if(tbl) tbl.onclick=e=>{
+    const tr=e.target.closest('tr[data-kw]'); if(!tr) return;
+    cpcTrendKw=tr.dataset.kw;
+    tbl.querySelectorAll('tr[data-kw]').forEach(x=>x.classList.toggle('mtdmatch',x===tr));
+    renderCpcTrend();
+    document.getElementById('cpcTrendPanel').scrollIntoView({block:'nearest',behavior:'smooth'});
+  };
+  renderCpcTrend();
+}
+// ── 키워드 일자별 추이(CPC·평균순위·매출) ────────────────────────────────
+// 세 지표를 한 차트에 겹쳐 "CPC가 오를 때 순위를 지켰는지, 매출이 따라왔는지"를 같이 본다.
+// 축이 3개(비용/순위/매출)라 매출축은 눈금을 숨기고 막대로만 두께감을 준다.
+function cpcTrendPanelHTML(){
+  if(!KWT) return `<div class="alert info" style="margin-top:8px">
+    ℹ️ 키워드별 <b>일자 추이</b>를 보려면 <code>python naver_kw_trend.py</code> 를 실행하세요.</div>`;
+  const miss=(KWT.period&&KWT.days)?
+    (dayDiff(KWT.period.since,KWT.period.until)+1)-KWT.days.length:0;
+  return `<div class="panel" id="cpcTrendPanel">
+    <div class="ph"><h2>일자별 추이 <span class="hint" id="cpcTrendSub"></span></h2></div>
+    <div class="chartbox tall"><canvas id="cpcTrend"></canvas></div>
+    <div class="foot">파워링크(SA) 기준 · <b>전체 계정 합산</b>(상단 계정 필터와 무관) ·
+      매출은 에어브릿지 검색어 매칭(하루 상위 500개 검색어만 보관 → 하위 키워드는 0으로 보일 수 있음) ·
+      클릭은 네이버, 매출은 에어브릿지라 집계 주체가 달라 절대값보다 <b>추세</b>로 읽을 것
+      ${miss>0?`· <span style="color:var(--critical)">수집 결측 ${miss}일은 선이 끊겨 표시</span>`:''}</div>
+  </div>`;
+}
+let cpcTrendChart;
+function renderCpcTrend(){
+  const cv=document.getElementById('cpcTrend'); if(!cv||!KWT) return;
+  const sub=document.getElementById('cpcTrendSub');
+  const series=(KWT.keywords||{})[cpcTrendKw];
+  if(sub) sub.textContent=cpcTrendKw?`${cpcTrendKw} · ${md(KWT.days[0])}~${md(KWT.days[KWT.days.length-1])}`
+    :'표에서 키워드를 클릭하세요';
+  if(cpcTrendChart){cpcTrendChart.destroy();cpcTrendChart=null;}
+  if(!series) return;
+  const ix={}; (KWT.cols||[]).forEach((c,i)=>ix[c]=i);
+  const pick=f=>series.map(v=>v?v[ix[f]]:null);
+  const ink=cvar('--ink2'),grid=cvar('--grid'),axis=cvar('--axis');
+  const box=cv.parentElement; cv.width=Math.max(320,box.clientWidth); cv.height=box.clientHeight||340;
+  cpcTrendChart=new Chart(cv,{data:{labels:KWT.days.map(md),datasets:[
+    {type:'bar',label:'매출(에어브릿지)',data:pick('rev'),yAxisID:'y2',
+     backgroundColor:cvar('--seq-bg'),borderColor:cvar('--seq'),borderWidth:1,borderRadius:3,order:3},
+    {type:'line',label:'CPC',data:pick('cpc'),yAxisID:'y',spanGaps:false,
+     borderColor:cvar('--critical'),backgroundColor:cvar('--critical'),borderWidth:2,
+     pointRadius:3,tension:.25,order:1},
+    {type:'line',label:'평균 노출순위',data:pick('rnk'),yAxisID:'y1',spanGaps:false,
+     borderColor:cvar('--s1'),backgroundColor:cvar('--s1'),borderWidth:2,borderDash:[4,3],
+     pointRadius:3,tension:.25,order:2}]},
+    options:{responsive:false,maintainAspectRatio:false,animation:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'top',align:'end',labels:{color:ink,boxWidth:10,boxHeight:10,usePointStyle:true}},
+        tooltip:{callbacks:{
+          label:c=>{const v=series[c.dataIndex]; if(!v) return ' 데이터 없음';
+            if(c.dataset.yAxisID==='y') return ` CPC ${won(v[ix.cpc])} (클릭 ${int(v[ix.clk])} · 비용 ${won(v[ix.cost])})`;
+            if(c.dataset.yAxisID==='y1') return ` 평균순위 ${v[ix.rnk]||'—'}`;
+            return ` 매출 ${won(v[ix.rev])} (주문 ${int(v[ix.ord])})`;}}}},
+      scales:{
+        x:{grid:{display:false},border:{color:axis},ticks:{color:ink}},
+        y:{position:'left',grid:{color:grid},border:{display:false},
+           title:{display:true,text:'CPC(원)',color:ink,font:{size:11}},ticks:{color:ink,callback:v=>krw(v)}},
+        y1:{position:'right',reverse:true,grid:{display:false},border:{display:false},
+            title:{display:true,text:'평균 노출순위(위가 상위)',color:ink,font:{size:11}},
+            ticks:{color:ink,precision:1}},
+        y2:{position:'right',display:false,beginAtZero:true}}}});
 }
 function exportCpcCompareCSV(){
   if(!KWM) return;
@@ -708,7 +790,10 @@ function renderHeader(){
   seg('hourBySeg',[['all','전체'],['device','기기'],['kind','유형']],hourBy,v=>{hourBy=v;renderHourly();},{});
   seg('hourMetricSeg',[['spend','소진액'],['imp','노출'],['clk','클릭']],hourMetric,v=>{hourMetric=v;renderHourly();},{});
   const bl=document.getElementById('baseLbl'); if(bl) bl.textContent=D.hourlyBaseLabel||'기준선';
-  document.getElementById('perBar').classList.toggle('dim',view==='kw'||view==='cpc');
+  // CPC 비교 탭은 기간이 MTD로 고정이라 기간 바가 아예 무의미 → 숨긴다(키워드 탭은 흐리게만).
+  const pb=document.getElementById('perBar');
+  pb.style.display = view==='cpc' ? 'none' : '';
+  pb.classList.toggle('dim',view==='kw');
 }
 function seg(id,opts,cur,on,cmap){
   const el=document.getElementById(id); if(!el)return;
@@ -1303,7 +1388,7 @@ function airbridgeDailyTileHTML(tot){
     const roas=tot.cost?Math.round(rev/tot.cost*100):0;
     return `<div class="tile"><div class="lab">전환 <span style="font-weight:500;color:var(--muted)">·에어브릿지</span></div>
       <div class="val">${int(ord)}</div>
-      <div class="sub">매출 ${krw(rev)} · ROAS ${roas}% <span class="ref">·SA채널 전체(계정분리 불가)</span></div></div>`;
+      <div class="sub">매출 ${krw(rev)} · ROAS ${roas}% <span class="ref">·파워링크(SA) 전체(계정분리 불가)</span></div></div>`;
   }
   return `<div class="tile"><div class="lab">전환 <span style="font-weight:500;color:var(--muted)">·참고</span></div>
     <div class="val">${int(tot.conv)}</div>
