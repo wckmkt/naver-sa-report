@@ -589,7 +589,7 @@ function exportKwMtdCSV(){
         o.clk?Math.round(o.cost/o.clk):0, o.rnkW?Math.round(o.rnkSum/o.rnkW*10)/10:'']);
     });
   };
-  push('curTopFull',`이번달(${ymd(KWM.period.since)}-${ymd(KWM.period.until)})·전수`,KWM.cols);
+  push('curTopFull',`${KWM.period.lastMonth?'지난달':'이번달'}(${ymd(KWM.period.since)}-${ymd(KWM.period.until)})·전수`,KWM.cols);
   push('lyTopFull',`작년동기간(${ymd(KWM.ly.since)}-${ymd(KWM.ly.until)})·전수`,KWM.lyCols);
   downloadCSV(`naver_키워드_MTD비교_${KWM.period.since}_${KWM.period.until}.csv`,rows);
 }
@@ -626,8 +626,9 @@ function cpcCompareRows(topN){
 }
 function cpcPeriodHint(){
   if(!KWM) return '';
-  return `이번달(${ymd(KWM.period.since)}-${ymd(KWM.period.until)}) vs `
-    +`작년동기간(${ymd(KWM.ly.since)}-${ymd(KWM.ly.until)}) · 순위는 이번달 클릭순위 기준 · 브랜드 키워드 제외`;
+  const lm=KWM.period.lastMonth?'지난달':'이번달';
+  return `${lm}(${ymd(KWM.period.since)}-${ymd(KWM.period.until)}) vs `
+    +`작년동기간(${ymd(KWM.ly.since)}-${ymd(KWM.ly.until)}) · 순위는 ${lm} 클릭순위 기준 · 브랜드 키워드 제외`;
 }
 // ── 변동성 보기 ──────────────────────────────────────────────────────────
 // "순위는 1위로 고정인데 CPC만 출렁이는" 키워드 = 차순위 경쟁사 입찰에 그대로 노출된 키워드.
@@ -1843,6 +1844,9 @@ function topCompareHTML(){
     return Object.values(agg).sort((a,b)=>b[mtdSort]-a[mtdSort]).slice(0,10);
   };
   const mtdRangeTxt=r=>r?`${md(r.since)}~${md(r.until)}`:'';
+  // 매월 1일엔 '이번달 1일~어제'가 성립하지 않아 수집기가 지난달 전체로 대체한다
+  // (period.lastMonth=true). 그때 '이번달 누적'이라고 쓰면 8월 데이터를 9월 것으로 오독한다.
+  const MTDLBL=(KWM&&KWM.period&&KWM.period.lastMonth)?'지난달 누적':'이번달 누적';
   const mtdRowsHtml=(list,shared)=>list.map((k,i)=>`<tr${shared&&shared.has(k.kw)?' class="mtdmatch"':''} style="cursor:pointer" onclick="this.classList.toggle('mtdmatch')" title="클릭하면 하이라이트 해제/복원">
     <td class="l">${i+1}</td><td class="l kwcell" title="${k.kw}">${k.kw}</td>
     <td>${int(k.imp)}</td><td>${int(k.clk)}</td>
@@ -1869,12 +1873,12 @@ function topCompareHTML(){
     ${tbl('📅 작년 동요일 TOP 10', PY?`${md(PY.date)} · 클릭순 · 브랜드 키워드 제외`:'', lyTop)}
   </div>
   ${KWM?`
-  <div class="ph" style="margin-top:16px"><h2 style="font-size:14px">이번달 누적 vs 작년 동기간 누적
+  <div class="ph" style="margin-top:16px"><h2 style="font-size:14px">${MTDLBL} vs 작년 동기간 누적
     <span class="hint">브랜드 키워드 제외 · 회색 배경 = 양쪽 다 TOP10인 키워드(CPC 비교용)</span></h2>
     <div class="grp"><button class="ghost" onclick="exportKwMtdCSV()">⬇ MTD CSV</button>
     <span class="lbl">정렬</span><div class="seg" id="mtdSortSeg"></div></div></div>
   <div class="grid2">
-    ${mtdTbl('📆 이번달 누적 TOP 10', mtdRangeTxt(KWM.period), mtdCur, mtdShared)}
+    ${mtdTbl(`📆 ${MTDLBL} TOP 10`, mtdRangeTxt(KWM.period), mtdCur, mtdShared)}
     ${mtdTbl('📅 작년 동기간 누적 TOP 10', mtdRangeTxt(KWM.ly), mtdLy, mtdShared)}
   </div>`:''}`;
 }
@@ -1932,7 +1936,7 @@ function renderKw(){
   const mtdRows=kwMtdRows(); if(mtdRows.length) gradeKw(mtdRows);
   const scatterRows=mtdRows.length?mtdRows:rows;
   const scatterHint=mtdRows.length
-    ? `이번달 누적(${KWM.period.since}~${KWM.period.until}) 기준 · 점 크기 = 클릭수 · 오른쪽 아래(비용↑ CPC↓)가 효자 키워드`
+    ? `${KWM.period.lastMonth?'지난달':'이번달'} 누적(${KWM.period.since}~${KWM.period.until}) 기준 · 점 크기 = 클릭수 · 오른쪽 아래(비용↑ CPC↓)가 효자 키워드`
     : `${P.since}~${P.until} 기준(MTD 데이터 없음) · 점 크기 = 클릭수 · 오른쪽 아래(비용↑ CPC↓)가 효자 키워드`;
   body.innerHTML=digest+`
   <div class="alert info" style="margin-top:16px">
@@ -1965,7 +1969,7 @@ function renderKw(){
   </div>
 
   <div class="panel">
-    <div class="ph"><h2>키워드 상세 <span class="hint">헤더 클릭 = 정렬 · 상위 300개 표시 · 화면은 금주 기준, CSV는 이번달 누적(MTD) 전체</span></h2>
+    <div class="ph"><h2>키워드 상세 <span class="hint">헤더 클릭 = 정렬 · 상위 300개 표시 · 화면은 금주 기준, CSV는 ${KW&&KW.mtd&&KW.mtd.lastMonth?'지난달':'이번달'} 누적(MTD) 전체</span></h2>
       <div class="tblctl">
         <input id="kwSearch" class="search" type="text" placeholder="🔍 키워드 검색" value="${kwQuery.replace(/"/g,'&quot;')}" autocomplete="off">
         <div class="seg" id="kwGradeSeg"></div>
