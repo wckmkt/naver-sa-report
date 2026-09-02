@@ -365,6 +365,7 @@ code{background:color-mix(in srgb,var(--ink) 7%,transparent);padding:1px 6px;bor
     ['naver_kw_data.js', 'window.__kwMissing=1'],
     ['naver_kw_daily_data.js', 'window.__kwdMissing=1'],
     ['naver_kw_mtd_data.js', 'window.__kwmMissing=1'],
+    ['naver_kw_mtd_lastmonth_data.js', 'window.__kwmlmMissing=1'],
     ['airbridge_conv_data.js', 'window.__abMissing=1'],
     ['airbridge_conv_mtd_data.js', 'window.__abmMissing=1'],
     ['naver_kw_bidest_data.js', 'window.__beMissing=1'],
@@ -381,7 +382,13 @@ code{background:color-mix(in srgb,var(--ink) 7%,transparent);padding:1px 6px;bor
 const D = window.NAVER_SPEND;
 const KW = window.NAVER_KW || null;
 const KWD = window.NAVER_KW_DAILY || null;
-const KWM = window.NAVER_KW_MTD || null;
+const KWM_CUR = window.NAVER_KW_MTD || null;
+// 전월 마감 시점(1일)에만 KWM_CUR 자체가 '지난달 전체' 모양이 되는데, 다음날 이번달
+// 데이터로 덮어써져 사라진다. naver_kw_mtd.py가 그 순간을 별도 파일로 고정 저장해두므로
+// (2026-09-02) 대시보드에서 '지난달 마감 보기' 토글로 아무 때나 다시 불러올 수 있다.
+const KWM_LM = window.NAVER_KW_MTD_LASTMONTH || null;
+let mtdView = 'cur';          // 'cur' | 'last' — 이번달 진행중 vs 지난달 마감
+let KWM = KWM_CUR;            // 아래 모든 KWM.* 참조가 토글을 그대로 따라가도록 재바인딩
 const AB = window.AIRBRIDGE_CONV || null;
 const ABM = window.AIRBRIDGE_CONV_MTD || null;
 const KWT = window.NAVER_KW_TREND || null;   // 키워드별 MTD 일자 추이(CPC 비교 탭 차트)
@@ -1761,7 +1768,7 @@ function median(arr){ if(!arr.length)return 0; const a=[...arr].sort((x,y)=>x-y)
 let _kwMtdCache={key:null,rows:null};
 function kwMtdRows(){
   if(!KWM) return [];
-  if(_kwMtdCache.key===scope) return _kwMtdCache.rows;
+  if(_kwMtdCache.key===scope+'|'+mtdView) return _kwMtdCache.rows;
   const MC=KWM.cols||['kw','imp','clk','cost','rnk'], mix={}; MC.forEach((c,i)=>mix[c]=i);
   const agg={};
   KWM.accounts.forEach(a=>{ if(scope!=='ALL'&&a.name!==scope) return;
@@ -1775,7 +1782,7 @@ function kwMtdRows(){
     k.ctr=k.imp?k.clk/k.imp*100:0; k.cpc=k.clk?k.cost/k.clk:0;
     return k;
   });
-  _kwMtdCache={key:scope,rows:out};
+  _kwMtdCache={key:scope+'|'+mtdView,rows:out};
   return out;
 }
 function gradeKw(rows){
@@ -1875,7 +1882,8 @@ function topCompareHTML(){
   ${KWM?`
   <div class="ph" style="margin-top:16px"><h2 style="font-size:14px">${MTDLBL} vs 작년 동기간 누적
     <span class="hint">브랜드 키워드 제외 · 회색 배경 = 양쪽 다 TOP10인 키워드(CPC 비교용)</span></h2>
-    <div class="grp"><button class="ghost" onclick="exportKwMtdCSV()">⬇ MTD CSV</button>
+    <div class="grp">${KWM_LM?'<span class="lbl">기준</span><div class="seg" id="mtdViewSeg"></div>':''}
+    <button class="ghost" onclick="exportKwMtdCSV()">⬇ MTD CSV</button>
     <span class="lbl">정렬</span><div class="seg" id="mtdSortSeg"></div></div></div>
   <div class="grid2">
     ${mtdTbl(`📆 ${MTDLBL} TOP 10`, mtdRangeTxt(KWM.period), mtdCur, mtdShared)}
@@ -1883,6 +1891,8 @@ function topCompareHTML(){
   </div>`:''}`;
 }
 function wireMtdSortSeg(){
+  if(KWM_LM) seg('mtdViewSeg',[['cur','이번달'],['last','지난달 마감']],mtdView,v=>{
+    mtdView=v; KWM=(v==='last'?KWM_LM:KWM_CUR); renderKw();});
   if(!KWM) return;
   seg('mtdSortSeg',[['clk','클릭순'],['imp','노출순']],mtdSort,v=>{mtdSort=v;renderKw();});
 }
