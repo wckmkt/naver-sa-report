@@ -198,6 +198,7 @@ code{background:color-mix(in srgb,var(--ink) 7%,transparent);padding:1px 6px;bor
     <button data-v="sim" style="display:none">효율 시뮬레이터</button>
     <button data-v="kw">키워드</button>
     <button data-v="cpc">CPC 비교</button>
+    <button data-v="signup">가입·첫구매</button>
   </div>
 
   <div class="ctl" id="ctlBar">
@@ -353,6 +354,11 @@ code{background:color-mix(in srgb,var(--ink) 7%,transparent);padding:1px 6px;bor
   <div id="cpcBody"></div>
 </div>
 
+<!-- ══════════════ 가입·첫구매 ══════════════ -->
+<div class="view" id="v-signup">
+  <div id="signupBody"></div>
+</div>
+
 </div>
 
 <script>
@@ -423,12 +429,15 @@ const ASTART=D.period.archiveStart||D.period.monthStart, MSTART=D.period.monthSt
 const LMEND=shiftDay(MSTART,-1), LMSTART=LMEND.slice(0,8)+'01';
 
 // ── 상태 ────────────────────────────────────────────────────────────────
-const VALID_VIEWS=['spend','sim','kw','cpc'];
+const VALID_VIEWS=['spend','sim','kw','cpc','signup'];
 let view=VALID_VIEWS.includes(location.hash.slice(1))?location.hash.slice(1):'spend';
 let scope='ALL', kind='ALL', device='ALL', trendBy='device', acctBy='device', mtdSort='clk', cpcTopN=50;
 let cpcTrendKw=null;   // CPC 비교 탭에서 선택된 키워드(일자별 추이 차트 대상)
 let cpcView='yoy';     // CPC 탭 표 보기: yoy=전년비교 / vol=변동성
 let cpcQuery='';       // CPC 탭 키워드 검색어 — 표시 중인 TOP N 안에서만 필터
+let signupSort='fo';   // 가입·첫구매 탭 정렬: fo=첫구매순 · su=가입순 · clk=클릭순
+let signupTopN=50;
+let signupQuery='';
 let _cpcRenderRows=()=>{};   // renderCpcCompare가 매번 새로 채우는 tbody 전용 렌더러
 let sortKey='spend', sortDir=-1;
 let tblQuery='', tblStatus='all';
@@ -824,6 +833,98 @@ function renderCpcTrend(){
         y1:{position:'right',reverse:true,grid:{display:false},border:{display:false},
             title:{display:true,text:'평균 노출순위(위가 상위)',color:ink,font:{size:11}},
             ticks:{color:ink,precision:1}}}}});
+}
+// ── 가입·첫구매 기여 키워드 ───────────────────────────────────────────────
+// 에어브릿지(가입·첫구매)와 네이버 자체(광고비) 두 소스를 검색어 텍스트로 매칭해
+// CPA를 만든다 — 에어브릿지는 계정을 몰라 ad_account_id가 비어있고(파일 상단 note
+// 참고), 네이버는 가입·첫구매를 모른다. 두 소스 다 이 계정 구조에서는 이 방법밖에 없다.
+function signupCostMap(){
+  if(!KWM) return {};
+  const MC=KWM.cols||['kw','imp','clk','cost','rnk'], mix={}; MC.forEach((c,i)=>mix[c]=i);
+  const m={};
+  (KWM.accounts||[]).forEach(a=>(a.curTopFull||[]).forEach(r=>{
+    const kw=r[mix.kw]; const o=m[kw]||(m[kw]=[0,0]);
+    o[0]+=r[mix.cost]; o[1]+=r[mix.clk];
+  }));
+  return m;   // kw -> [비용, 네이버클릭]
+}
+function signupRows(){
+  if(!ABM) return [];
+  const ix={}; (ABM.termCols||[]).forEach((c,i)=>ix[c]=i);
+  const costMap=signupCostMap();
+  return (ABM.byTerm||[]).map(r=>{
+    const kw=r[ix.term], clk=r[ix.clicks], su=r[ix.signups]||0, fo=r[ix.firstOrders]||0,
+          ord=r[ix.orders], rev=r[ix.revenue];
+    const c=costMap[kw], cost=c?c[0]:null;
+    return {kw, clk, su, fo, ord, rev, cost,
+      suCPA:(cost!=null&&su)?cost/su:null, foCPA:(cost!=null&&fo)?cost/fo:null,
+      mall:BRAND_KW_RE.test(kw)};
+  }).filter(r=>r.su>0||r.fo>0);
+}
+function renderSignup(){
+  const body=document.getElementById('signupBody');
+  if(!ABM){
+    body.innerHTML=`<div class="panel"><div class="empty">에어브릿지 MTD 데이터가 없습니다.<br>
+      터미널에서 <code>python airbridge_conv.py --mtd</code> 를 실행하세요.</div></div>`;
+    return;
+  }
+  const rows=signupRows();
+  const sk=signupSort==='su'?'su':signupSort==='clk'?'clk':'fo';
+  rows.sort((a,b)=>b[sk]-a[sk]);
+  const q=signupQuery.trim().toLowerCase();
+  const filtered=q?rows.filter(r=>r.kw.toLowerCase().includes(q)):rows;
+  const shown=filtered.slice(0,signupTopN);
+  const totSu=rows.reduce((s,r)=>s+r.su,0), totFo=rows.reduce((s,r)=>s+r.fo,0);
+  const cpaCell=v=>v==null?'<span class="ref">비용매칭안됨</span>':won(Math.round(v));
+
+  const rowHtml=shown.map((r,i)=>`<tr${r.mall?' class="mtdmatch"':''}>
+    <td class="l">${i+1}</td><td class="l kwcell" title="${r.kw}">${r.kw}</td>
+    <td>${int(r.clk)}</td><td>${int(r.su)}</td><td>${int(r.fo)}</td>
+    <td>${cpaCell(r.suCPA)}</td><td>${cpaCell(r.foCPA)}</td>
+    <td>${int(r.ord)}</td><td>${won(r.rev)}</td>
+  </tr>`).join('')||`<tr><td colspan="9" class="empty">${q?`'${signupQuery}' 검색 결과 없음`:'가입·첫구매가 발생한 키워드가 없습니다'}</td></tr>`;
+
+  body.innerHTML=`
+  <div class="ph" style="margin-top:16px"><h2 style="font-size:14px">가입·첫구매 기여 키워드
+    <span class="hint">에어브릿지(naver.searchad 채널 전체 합산) · ${ABM.since}~${ABM.until} · 회색 배경 = 자사몰명</span></h2>
+    <div class="grp"><span class="lbl">정렬</span><div class="seg" id="signupSortSeg"></div>
+      <span class="lbl">TOP</span><div class="seg" id="signupTopNSeg"></div>
+      <input id="signupSearch" class="search" type="text" placeholder="🔍 키워드 검색"
+        value="${signupQuery.replace(/"/g,'&quot;')}" autocomplete="off">
+      <span class="lbl">${shown.length} / ${rows.length}건</span></div></div>
+  <div class="tiles">
+    <div class="tile"><div class="lab">가입 기여 키워드</div><div class="val">${rows.filter(r=>r.su>0).length}</div>
+      <div class="sub">합계 가입 ${int(totSu)}건</div></div>
+    <div class="tile"><div class="lab">첫구매 기여 키워드</div><div class="val">${rows.filter(r=>r.fo>0).length}</div>
+      <div class="sub">합계 첫구매 ${int(totFo)}건</div></div>
+  </div>
+  <div class="panel">
+    <div class="tblwrap"><table class="fixedcol" id="signuptbl">
+      <colgroup><col style="width:48px"><col style="width:150px"><col style="width:90px"><col style="width:70px"><col style="width:80px">
+        <col style="width:120px"><col style="width:120px"><col style="width:80px"><col style="width:110px"></colgroup>
+      <thead><tr>
+        <th class="l">순위</th><th class="l">키워드</th><th>클릭수</th><th>가입</th><th>첫구매</th>
+        <th>가입 CPA</th><th>첫구매 CPA</th><th>전체주문</th><th>전체매출</th>
+      </tr></thead><tbody>${rowHtml}</tbody></table></div>
+    <div class="foot">가입·첫구매는 <b>에어브릿지 채널(naver.searchad) 전체 합산</b> 기준(계정별 분리 불가) ·
+      CPA는 같은 기간 네이버 자체 키워드 광고비(MTD 누적)를 검색어 텍스트로 매칭해 계산했습니다 —
+      확장검색 등으로 텍스트가 안 맞으면 "비용매칭안됨"으로 표시됩니다.<br>
+      가입·첫구매가 0인 키워드는 제외했고, 클릭순 TOP500 ∪ 가입순 TOP300 ∪ 첫구매순 TOP300 범위 안에서만 집계됩니다(그 밖의 롱테일은 미포함).</div>
+  </div>`;
+  seg('signupSortSeg',[['fo','첫구매순'],['su','가입순'],['clk','클릭순']],signupSort,v=>{signupSort=v;renderSignup();},{});
+  seg('signupTopNSeg',[[20,'20'],[50,'50'],[100,'100'],[9999,'전체']],signupTopN,v=>{signupTopN=+v;renderSignup();},{});
+  const si=document.getElementById('signupSearch');
+  if(si) si.oninput=e=>{signupQuery=e.target.value;renderSignup();};
+}
+function exportSignupCSV(){
+  if(!ABM) return;
+  const rows=[['키워드','클릭수','가입','첫구매','가입CPA','첫구매CPA','전체주문','전체매출','자사몰명']];
+  signupRows().sort((a,b)=>b.fo-a.fo).forEach(r=>{
+    rows.push([r.kw, r.clk, r.su, r.fo,
+      r.suCPA!=null?Math.round(r.suCPA):'', r.foCPA!=null?Math.round(r.foCPA):'',
+      r.ord, r.rev, r.mall?'Y':'']);
+  });
+  downloadCSV(`naver_가입첫구매_${ABM.since}_${ABM.until}.csv`,rows);
 }
 function exportCpcCompareCSV(){
   if(!KWM) return;
@@ -2078,6 +2179,7 @@ function renderAll(){
   if(view==='spend'){renderTiles();renderAcctBar();renderTrend();renderHourly();renderTable();}
   else if(view==='sim'){renderSim();}
   else if(view==='cpc'){renderCpcCompare();}
+  else if(view==='signup'){renderSignup();}
   else {renderKw();}
 }
 document.getElementById('nav').onclick=e=>{const b=e.target.closest('button'); if(!b)return;
@@ -2093,6 +2195,7 @@ document.getElementById('themeBtn').onclick=()=>{
 };
 document.getElementById('csvBtn').onclick=()=>{ if(view==='kw'){ if(KW)exportKwCSV(); else alert('키워드 데이터가 없습니다. python naver_kw_collect.py 실행 후 이용하세요.'); }
   else if(view==='cpc'){ if(KWM)exportCpcCompareCSV(); else alert('MTD 데이터가 없습니다. python naver_kw_mtd.py 실행 후 이용하세요.'); }
+  else if(view==='signup'){ if(ABM)exportSignupCSV(); else alert('에어브릿지 MTD 데이터가 없습니다. python airbridge_conv.py --mtd 실행 후 이용하세요.'); }
   else exportSpendCSV(); };
 document.getElementById('dFrom').onchange=e=>{pFrom=e.target.value||pFrom;preset='custom';renderAll();};
 document.getElementById('dTo').onchange=e=>{pTo=e.target.value||pTo;preset='custom';renderAll();};
